@@ -20,32 +20,14 @@ let timer = null;
 let metronomeEnabled = true;
 let autoScrollEnabled = false;
 
-// Lyrics synlighet och flagga om det finns text
-let hasLyrics = false;
-let lyricsVisible = true;
+// Synlighet för sektionstexter och flagga om det finns sådana
+// hasSectionText blir true om minst en sektion har text definierad i CSV
+let hasSectionText = false;
+// textVisible styr om sektionstexter visas – togglas via knappen "Text på/av"
+let textVisible = true;
 
-// Scroll-sync mellan lyrics-rad och mikro-rad för aktuell sektion
-let isSyncingScroll = false;
-
-function setupScrollSync() {
-  const lyricsRow = document.getElementById('lyricsRow');
-  const microCurrent = document.getElementById('microCurrent');
-  if (!lyricsRow || !microCurrent) return;
-
-  // använd onscroll för att undvika att stacka lyssnare vid rebuild
-  lyricsRow.onscroll = () => {
-    if (isSyncingScroll) return;
-    isSyncingScroll = true;
-    microCurrent.scrollLeft = lyricsRow.scrollLeft;
-    isSyncingScroll = false;
-  };
-  microCurrent.onscroll = () => {
-    if (isSyncingScroll) return;
-    isSyncingScroll = true;
-    lyricsRow.scrollLeft = microCurrent.scrollLeft;
-    isSyncingScroll = false;
-  };
-}
+// Lista över låtar som kan väljas via dropdown
+let songsList = [];
 
 // AudioContext för metronompip
 let audioCtx = null;
@@ -98,28 +80,40 @@ function parseCsv(text) {
  */
 function parseSections(csv, startRow) {
   const result = [];
-  hasLyrics = false;
+  hasSectionText = false;
   const start = typeof startRow === 'number' ? startRow : 1;
   for (let r = start; r < csv.length; r++) {
     const row = csv[r];
     if (!row) continue;
     const name = (row[0] || '').trim() || `Section ${r}`;
+    // trim trailing empty cells
+    let lastIndex = row.length - 1;
+    while (lastIndex > 0 && !(row[lastIndex] && row[lastIndex].trim())) {
+      lastIndex--;
+    }
+    let textLines = null;
+    // check if last cell contains section text in curly braces
+    const lastCell = row[lastIndex] ? row[lastIndex].trim() : '';
+    let barsEndIndex = lastIndex;
+    if (lastCell.startsWith('{') && lastCell.endsWith('}')) {
+      // extract text and split by '='
+      const inner = lastCell.slice(1, -1).trim();
+      if (inner) {
+        textLines = inner.split('=').map(s => s.trim());
+        hasSectionText = true;
+      }
+      barsEndIndex = lastIndex - 1;
+    }
     const bars = [];
-    for (let c = 1; c < row.length; c++) {
+    for (let c = 1; c <= barsEndIndex; c++) {
       const cell = (row[c] || '').trim();
       if (!cell) break;
-      let chordPart = cell;
-      let textPart = null;
-      const braceStart = cell.indexOf('{');
-      const braceEnd = cell.lastIndexOf('}');
-      if (braceStart >= 0 && braceEnd >= 0 && braceEnd > braceStart) {
-        textPart = cell.substring(braceStart + 1, braceEnd).trim();
-        chordPart = cell.substring(0, braceStart).trim();
-        hasLyrics = true;
-      }
-      bars.push({ chordDef: chordPart, text: textPart });
+      // assume no braces inside bar cells
+      bars.push({ chordDef: cell });
     }
-    if (bars.length) result.push({ name, bars });
+    if (bars.length) {
+      result.push({ name, bars, textLines });
+    }
   }
   return result;
 }
@@ -204,12 +198,6 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   barDiv.dataset.sectionIndex = sectionIndex;
   barDiv.dataset.barIndex = barIndex;
   const beats = parseBar(barObj);
-
-  // Viktigt för alignment med lyrics-raden: låt barens bredd spegla
-  // antal beats i takten (men behåll min-width via CSS).
-  barDiv.style.flexGrow = beats.length;
-  barDiv.style.flexBasis = '0';
-
   const uniqueChords = [...new Set(beats.filter(ch => ch !== ''))];
   if (uniqueChords.length === 1) {
     const chordLabel = uniqueChords[0] === '_' ? '—' : uniqueChords[0];
@@ -293,48 +281,36 @@ function buildMicroRows(sectionIndex) {
       nextRow.appendChild(barEl);
     });
   }
-  // bygg lyrics-rad om det finns text
-  buildLyricsRow(sectionIndex);
-
-  // se till att lyrics-raden och microCurrent skrollar ihop
-  setupScrollSync();
+  // uppdatera sektionstext
+  buildSectionText(sectionIndex);
 }
 
+
 /**
- * Bygger lyrics-raden för aktuell sektion. Varje bar representeras
- * med en cell vars bredd baseras på antalet beats. Visas endast
- * om det finns lyrics i någon bar och om lyssynk är på.
+ * Bygger eller uppdaterar textraden för sektioner. Visar texten
+ * ovanför ackord och macroflow om det finns text för aktuell
+ * sektion och textvisning är påslagen.
  */
-function buildLyricsRow(sectionIndex) {
-  const row = document.getElementById('lyricsRow');
-  // om inga lyrics finns i hela chart, göm rad och returnera
-  if (!hasLyrics) {
-    row.classList.add('hidden');
-    row.innerHTML = '';
+function buildSectionText(sectionIndex) {
+  const container = document.getElementById('sectionText');
+  if (!hasSectionText) {
+    container.textContent = '';
+    container.style.display = 'none';
     return;
   }
-  // om lyrics är avstängda
-  if (!lyricsVisible) {
-    row.classList.add('hidden');
+  if (!textVisible) {
+    container.style.display = 'none';
     return;
-  } else {
-    row.classList.remove('hidden');
   }
-  row.innerHTML = '';
   const sec = sections[sectionIndex];
-  if (!sec) return;
-  sec.bars.forEach((barObj, bi) => {
-    const beats = parseBar(barObj);
-    const cell = document.createElement('div');
-    cell.className = 'lyrics-cell';
-    cell.dataset.sectionIndex = sectionIndex;
-    cell.dataset.barIndex = bi;
-    // sätt flex-grow baserat på antal beats
-    cell.style.flexGrow = beats.length;
-    cell.style.flexBasis = '0';
-    cell.textContent = barObj.text || '';
-    row.appendChild(cell);
-  });
+  if (!sec || !sec.textLines || sec.textLines.length === 0) {
+    container.textContent = '';
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  // skapa text med radbrytningar
+  container.textContent = sec.textLines.join('\n');
 }
 
 /**
@@ -434,12 +410,7 @@ function highlightMicro(index) {
   const displayChord = curr.chord === '_' ? '' : (curr.chord || '');
   document.getElementById('currentChord').textContent = displayChord;
 
-  // highlight lyrics cell
-  document.querySelectorAll('.lyrics-cell').forEach(el => el.classList.remove('active'));
-  const lyricsCells = document.querySelectorAll(
-    `.lyrics-cell[data-sectionIndex="${curr.section}"][data-barIndex="${curr.bar}"]`
-  );
-  lyricsCells.forEach(cell => cell.classList.add('active'));
+  // sektionstext markeras inte per bar
 }
 
 /**
@@ -516,6 +487,73 @@ function startPlaybackFrom(index) {
 }
 
 /**
+ * Läser in songs.json och fyller dropdown-menyn. Kallas vid sidan start.
+ */
+async function loadSongList() {
+  const selectEl = document.getElementById('songSelect');
+  if (!selectEl) return;
+  try {
+    const res = await fetch('songs.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const list = await res.json();
+    songsList = Array.isArray(list) ? list : [];
+    // sortera per namn för setlist-ordning
+    songsList.sort((a, b) => {
+      const an = a.name || a.file || '';
+      const bn = b.name || b.file || '';
+      return an.localeCompare(bn);
+    });
+    // töm befintliga alternativ utom första
+    while (selectEl.options.length > 1) {
+      selectEl.remove(1);
+    }
+    songsList.forEach((song, idx) => {
+      const opt = document.createElement('option');
+      opt.value = song.file;
+      opt.textContent = song.name || song.file;
+      selectEl.appendChild(opt);
+    });
+    // visa wrapper bara om det finns låtar
+    const wrapper = document.getElementById('songSelectWrapper');
+    const loadBtn = document.getElementById('loadSong');
+    if (songsList.length) {
+      if (wrapper) wrapper.style.display = 'flex';
+      if (loadBtn) loadBtn.style.display = '';
+    } else {
+      if (wrapper) wrapper.style.display = 'none';
+      if (loadBtn) loadBtn.style.display = 'none';
+    }
+  } catch (e) {
+    // misslyckades att hämta listan; dölj dropdown
+    console.error('Kunde inte läsa songs.json', e);
+    const wrapper = document.getElementById('songSelectWrapper');
+    const loadBtn = document.getElementById('loadSong');
+    if (wrapper) wrapper.style.display = 'none';
+    if (loadBtn) loadBtn.style.display = 'none';
+  }
+}
+
+/**
+ * Laddar vald CSV-fil från dropdown och fyller i textarea och laddar diagrammet.
+ */
+async function loadSelectedSong() {
+  const selectEl = document.getElementById('songSelect');
+  const filename = selectEl.value;
+  if (!filename) return;
+  try {
+    const res = await fetch(filename);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const csvText = await res.text();
+    // fyll i csv-fältet
+    document.getElementById('csvInput').value = csvText.trim();
+    // ladda diagrammet automatiskt
+    loadChart();
+  } catch (e) {
+    console.error('Kunde inte läsa vald låt', e);
+    alert('Kunde inte läsa vald låt: ' + filename);
+  }
+}
+/**
  * Stoppar playback och återställer knappar. Optionellt tömmer display.
  */
 function stopPlayback(resetDisplay = true) {
@@ -591,19 +629,25 @@ function loadChart() {
   highlightMicro(playIndex);
   stopPlayback();
 
-  // visa eller dölj textknapp beroende på om lyrics finns
+  // visa eller dölj textknapp beroende på om sektionstext finns
   const textBtn = document.getElementById('textToggle');
-  if (hasLyrics) {
-    lyricsVisible = true;
+  if (hasSectionText) {
+    // det finns text i någon sektion – visa knappen och sätt aktivt läge
+    textVisible = true;
     textBtn.style.display = '';
     textBtn.textContent = 'Text på';
     textBtn.classList.add('active');
-    buildLyricsRow(currentSectionIndex);
+    // bygg text för första sektionen
+    buildSectionText(currentSectionIndex);
   } else {
-    lyricsVisible = false;
-    const lyricsRow = document.getElementById('lyricsRow');
-    lyricsRow.classList.add('hidden');
+    // ingen sektionstext – dölj knappen och textcontainern
+    textVisible = false;
     textBtn.style.display = 'none';
+    const sectionTextEl = document.getElementById('sectionText');
+    if (sectionTextEl) {
+      sectionTextEl.textContent = '';
+      sectionTextEl.style.display = 'none';
+    }
   }
 }
 
@@ -655,18 +699,19 @@ function toggleAutoScroll() {
  * Togglar visning av lyrics. Om inga lyrics finns så görs inget.
  */
 function toggleText() {
-  if (!hasLyrics) return;
-  lyricsVisible = !lyricsVisible;
+  // toggla endast om sektionstexter finns
+  if (!hasSectionText) return;
+  textVisible = !textVisible;
   const btn = document.getElementById('textToggle');
-  if (lyricsVisible) {
+  if (textVisible) {
     btn.textContent = 'Text på';
     btn.classList.add('active');
   } else {
     btn.textContent = 'Text av';
     btn.classList.remove('active');
   }
-  // rebuild lyrics row for current section to reflect toggle
-  buildLyricsRow(currentSectionIndex);
+  // uppdatera textsektionen för aktuell sektion
+  buildSectionText(currentSectionIndex);
 }
 
 /**
@@ -714,4 +759,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('metronomeToggle').addEventListener('click', toggleMetronome);
   document.getElementById('scrollToggle').addEventListener('click', toggleAutoScroll);
   document.getElementById('textToggle').addEventListener('click', toggleText);
+
+  // ladda songlist och sätt upp lyssnare på laddningsknapp
+  loadSongList();
+  const loadSongBtn = document.getElementById('loadSong');
+  if (loadSongBtn) {
+    loadSongBtn.addEventListener('click', () => {
+      loadSelectedSong();
+    });
+  }
 });

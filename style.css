@@ -105,6 +105,15 @@ main {
   background: #2a5873;
 }
 
+/* Song selection wrapper */
+/* Song selection wrapper (hidden by default; becomes flex via JS if songs exist) */
+.song-select {
+  display: none;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
 /* Lyrics rad och celler */
 .lyrics-row {
   display: flex;
@@ -133,6 +142,19 @@ main {
 .lyrics-cell.active {
   background: #ffd96c;
   border-radius: 3px;
+}
+
+/* Textrad för sektioner */
+.section-text {
+  margin-bottom: 0.5rem;
+  padding: 0.4rem;
+  background: #f0f5f8;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1.2;
+  color: #222;
+  white-space: pre-wrap;
 }
 
 /* Ackorddisplay */

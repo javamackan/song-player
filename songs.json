@@ -1,0 +1,27 @@
+[
+  {
+    "name": "01 Back on Track",
+    "file": "BackOnTrack.csv"
+  },
+  {
+    "name": "03 Kingmaker",
+    "file": "Kingmaker.csv"
+  },
+{
+    "name": "04 Judgement Day",
+    "file": "Judgement.csv"
+  },
+{
+    "name": "08 Wheels and wings",
+    "file": "Wheels.csv"
+  },
+  
+ {
+    "name": "11 Circle of Trust",
+    "file": "Circle.csv"
+  },
+	{
+    "name": "12 Half man half consumer",
+    "file": "Halfman.csv"
+  	}
+]
