@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChordFlow v10</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <!-- Header visar endast låtens titel. Innan CSV laddas visas en placeholder -->
+    <h2 id="songTitle" class="song-title">Titel</h2>
+  </header>
+  <main>
+    <!-- wrapper för kontrollpanel och toggle-knapp -->
+    <div class="controls-wrapper">
+      <div class="controls">
+        <label for="csvInput">CSV (klistra in):</label>
+        <textarea id="csvInput" rows="6" placeholder="Titel,Tempo\nSection,Bar1,Bar2\nIntro,D .. G,G .. A\nVerse 1,D .. G,Em .. A,D .. G,D .. A"></textarea>
+        <label for="tempo">Tempo (BPM):</label>
+        <input type="number" id="tempo" min="30" max="300" value="120" />
+        <div class="btn-row">
+          <button id="load">Ladda diagram</button>
+          <button id="start">Starta</button>
+          <button id="stop" disabled>Stopp</button>
+        </div>
+        <!-- rad för togglar -->
+        <div class="toggle-row">
+          <button id="metronomeToggle" class="toggle-button">Metronom på</button>
+          <button id="scrollToggle" class="toggle-button">Autoscroll av</button>
+          <button id="textToggle" class="toggle-button">Text på</button>
+        </div>
+      </div>
+      <button id="toggleControls" class="toggle-controls">Fäll ihop ▲</button>
+    </div>
+    <div id="currentChord" class="current-chord"></div>
+    <div id="macroFlow" class="macro-flow"></div>
+    <div id="microFlow" class="micro-flow">
+      <!-- lyrics row: visas endast om det finns text i CSV och lyssynk är på -->
+      <div id="lyricsRow" class="lyrics-row"></div>
+      <div id="microCurrent" class="micro-row"></div>
+      <div id="microNext" class="micro-row"></div>
+    </div>
+  </main>
+  <footer>
+    <small>Klicka på sektioner eller takter för att navigera och spela upp.</small>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>
