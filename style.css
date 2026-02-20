@@ -107,11 +107,16 @@ main {
 
 /* Song selection wrapper */
 /* Song selection wrapper (hidden by default; becomes flex via JS if songs exist) */
+/* Song selection wrapper: visa i rad, göm tills songs finns */
+/* Song selection wrapper: visas som rad. Ursprungligen doldes den tills songs.json laddats,
+   men nu visas den alltid så att användaren ser dropdown och kan eventuellt välja. */
 .song-select {
-  display: none;
-  flex-direction: column;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 0.4rem;
-  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
 }
 
 /* Lyrics rad och celler */
@@ -184,6 +189,8 @@ main {
   font-size: 0.8rem;
   white-space: nowrap;
   cursor: pointer;
+  /* bakgrundsfärg sätts via CSS variabel definierad inline i script */
+  background: var(--section-color, #e6f7ff);
 }
 .macro-section.current {
   background: #2a5873;
@@ -206,15 +213,21 @@ main {
 }
 .bar {
   position: relative;
-  min-width: 60px;
-  border: 1px solid #ddd;
+  /* Dynamic width: base width, but allow expansion based on content */
+  min-width: 70px;
+  flex: 0 0 auto;
+  /* Tydligare och tjockare kant, färgsätts via JS */
+  border: 2px solid #ddd;
   padding: 0.3rem;
   margin-right: 0.25rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  /* låt barn uppta full bredd och staplas uppifrån, så att cue-text får plats */
+  align-items: stretch;
+  justify-content: flex-start;
   cursor: pointer;
+  /* fast höjd så att piparna placeras konsekvent */
+  height: 5rem;
 }
 .bar.active {
   background: #ffe4b2;
@@ -246,11 +259,19 @@ main {
   font-weight: bold;
 }
 
+/*
+ * Place beat pips at the bottom of the bar. With a fixed bar height,
+ * allowing margin-top: auto will push the pip row down while the
+ * segments and cue text occupy the top portion. We add a small
+ * bottom margin to separate the pips from the bottom edge. The
+ * justify-content remains space-between so the pips spread evenly.
+ */
 .beat-pips {
   display: flex;
   justify-content: space-between;
   width: 100%;
-  margin-top: 0.2rem;
+  margin-top: auto;
+  margin-bottom: 0.25rem;
 }
 .pip {
   width: 6px;
@@ -260,4 +281,33 @@ main {
 }
 .pip.active {
   background: #ffd96c;
+}
+
+/* Cue text inside bar */
+.cue-text {
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: #555;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+.cue-text.active {
+  font-weight: bold;
+  color: #2a5873;
+}
+
+/* Current cue display */
+#currentCue {
+  font-size: 1rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: #333;
+  min-height: 1.2rem;
+}
+
+/* Next section preview italic style in section text */
+.next-preview {
+  font-style: italic;
+  opacity: 0.7;
 }
