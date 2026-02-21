@@ -16,21 +16,6 @@ let currentSectionIndex = 0;
 let playIndex = 0;
 let timer = null;
 
-// Pastellfärger för sektioner. Cykla igenom vid behov
-const pastelPalette = [
-  '#f7f0fa', // lavender blush
-  '#f0f7ff', // light blue
-  '#f9f5ea', // ivory
-  '#eefaf5', // mint
-  '#fff7f0', // light peach
-  '#f5f5e8'  // very light beige
-];
-// Tilldelade färger per sektion (fylls i loadChart)
-let sectionColors = [];
-
-// Mörkare kantfärger per sektion. Beräknas från sectionColors i loadChart
-let sectionBorderColors = [];
-
 // Metronom och autoscroll
 let metronomeEnabled = true;
 let autoScrollEnabled = false;
@@ -75,22 +60,6 @@ function playTick() {
   } catch (e) {
     // om audio inte stöds gör inget
   }
-}
-
-/**
- * Beräknar en mörkare variant av en hex-färg genom att multiplicera
- * varje kanal med en faktor (<1). Om inmatningen saknas eller är
- * ogiltig returneras den ursprungliga färgen.
- * @param {string} hex färg i format #rrggbb
- * @param {number} factor multiplikationsfaktor (0–1)
- */
-function getDarkerColor(hex, factor = 0.7) {
-  if (!hex || !hex.startsWith('#') || hex.length !== 7) return hex;
-  const r = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(1, 3), 16) * factor)));
-  const g = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(3, 5), 16) * factor)));
-  const b = Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(5, 7), 16) * factor)));
-  const toHex = v => v.toString(16).padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 /**
@@ -140,16 +109,7 @@ function parseSections(csv, startRow) {
       const cell = (row[c] || '').trim();
       if (!cell) break;
       // assume no braces inside bar cells
-      // check for cue text in hakparanteser i cell
-      let chordDef = cell;
-      let cue = null;
-      const cueMatch = chordDef.match(/\[(.*?)\]/);
-      if (cueMatch) {
-        cue = cueMatch[1].trim();
-        // remove the entire [cue] substring from chordDef
-        chordDef = chordDef.replace(cueMatch[0], '').trim();
-      }
-      bars.push({ chordDef: chordDef, cue });
+      bars.push({ chordDef: cell });
     }
     if (bars.length) {
       result.push({ name, bars, textLines });
@@ -221,9 +181,6 @@ function buildMacroFlow() {
     div.style.flexBasis = `${widthPercent}%`;
     div.textContent = sec.name;
     div.dataset.index = index;
-    // definiera sektionens basfärg via CSS variabel. Aktuell markering ändras via klass .current
-    const color = sectionColors[index] || pastelPalette[index % pastelPalette.length];
-    div.style.setProperty('--section-color', color);
     div.addEventListener('click', () => {
       navigateToSection(index);
     });
@@ -240,10 +197,6 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   barDiv.className = 'bar';
   barDiv.dataset.sectionIndex = sectionIndex;
   barDiv.dataset.barIndex = barIndex;
-  // sätt kantfärg baserat på mörkare variant av sektionens pastellfärg
-  const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length], 0.7);
-  barDiv.style.borderColor = borderColor;
-  // visa svagt bakgrundsfärg när aktiv: hanteras via CSS .bar.active men vi kan sätta border-färg ovan
   const beats = parseBar(barObj);
   const uniqueChords = [...new Set(beats.filter(ch => ch !== ''))];
   if (uniqueChords.length === 1) {
@@ -298,13 +251,6 @@ function createBarElement(sectionIndex, barIndex, barObj) {
     }
     barDiv.appendChild(pips);
   }
-  // lägg till cue-text om definierad för bar
-  if (barObj && barObj.cue) {
-    const cueDiv = document.createElement('div');
-    cueDiv.className = 'cue-text';
-    cueDiv.textContent = barObj.cue;
-    barDiv.appendChild(cueDiv);
-  }
   barDiv.addEventListener('click', () => {
     const index = barOffsets[sectionIndex][barIndex];
     startPlaybackFrom(index);
@@ -347,43 +293,24 @@ function buildMicroRows(sectionIndex) {
  */
 function buildSectionText(sectionIndex) {
   const container = document.getElementById('sectionText');
-  // om det inte finns någon sektionstext globalt eller om text är avstängd, döljs textbehållaren
-  if (!hasSectionText || !textVisible) {
+  if (!hasSectionText) {
     container.textContent = '';
     container.style.display = 'none';
     return;
   }
-  // hämta aktuella textrader för denna sektion, om några
+  if (!textVisible) {
+    container.style.display = 'none';
+    return;
+  }
   const sec = sections[sectionIndex];
-  let currLines = [];
-  if (sec && sec.textLines && sec.textLines.length > 0) {
-    currLines = sec.textLines;
-  }
-  // förhandsvisning: ta första raden från nästa sektion om den finns och innehåller text; annars tomt
-  let preview = '';
-  const nextSec = sections[sectionIndex + 1];
-  if (nextSec && nextSec.textLines && nextSec.textLines.length > 0) {
-    preview = nextSec.textLines[0];
-  }
-  // om varken aktuella rader eller preview finns, visa ingenting
-  if ((!currLines || currLines.length === 0) && !preview) {
+  if (!sec || !sec.textLines || sec.textLines.length === 0) {
     container.textContent = '';
     container.style.display = 'none';
     return;
   }
   container.style.display = '';
-  // bygg innehåll: aktuella rader och eventuell preview
-  let html = '';
-  if (currLines && currLines.length > 0) {
-    html += currLines.map(line => line).join('<br>');
-  }
-  if (preview) {
-    if (html) {
-      html += '<br>';
-    }
-    html += '<span class="next-preview">' + preview + '</span>';
-  }
-  container.innerHTML = html;
+  // skapa text med radbrytningar
+  container.textContent = sec.textLines.join('\n');
 }
 
 /**
@@ -482,24 +409,6 @@ function highlightMicro(index) {
   // display chord (empty for rest)
   const displayChord = curr.chord === '_' ? '' : (curr.chord || '');
   document.getElementById('currentChord').textContent = displayChord;
-  // display cue
-  const cueDisplayEl = document.getElementById('currentCue');
-  let cueText = '';
-  const secObj = sections[curr.section];
-  if (secObj && secObj.bars && secObj.bars[curr.bar] && secObj.bars[curr.bar].cue) {
-    cueText = secObj.bars[curr.bar].cue;
-  }
-  cueDisplayEl.textContent = cueText || '';
-
-  // highlight cue text within bar
-  document.querySelectorAll('.cue-text').forEach(el => el.classList.remove('active'));
-  const activeBar = Array.from(document.querySelectorAll('#microFlow .bar')).find(el => {
-    return parseInt(el.dataset.sectionIndex, 10) === curr.section && parseInt(el.dataset.barIndex, 10) === curr.bar;
-  });
-  if (activeBar) {
-    const cueEl = activeBar.querySelector('.cue-text');
-    if (cueEl) cueEl.classList.add('active');
-  }
 
   // sektionstext markeras inte per bar
 }
@@ -604,24 +513,23 @@ async function loadSongList() {
       opt.textContent = song.name || song.file;
       selectEl.appendChild(opt);
     });
+    // visa wrapper bara om det finns låtar
     const wrapper = document.getElementById('songSelectWrapper');
     const loadBtn = document.getElementById('loadSong');
-    // Visa alltid dropdown och knapp; om inga låtar finns, inaktivera knappen
-    if (wrapper) wrapper.style.display = 'flex';
-    if (loadBtn) {
-      loadBtn.style.display = '';
-      loadBtn.disabled = songsList.length === 0;
+    if (songsList.length) {
+      if (wrapper) wrapper.style.display = 'flex';
+      if (loadBtn) loadBtn.style.display = '';
+    } else {
+      if (wrapper) wrapper.style.display = 'none';
+      if (loadBtn) loadBtn.style.display = 'none';
     }
   } catch (e) {
-    // misslyckades att hämta listan; visa ändå dropdown men inaktivera knapp
+    // misslyckades att hämta listan; dölj dropdown
     console.error('Kunde inte läsa songs.json', e);
     const wrapper = document.getElementById('songSelectWrapper');
     const loadBtn = document.getElementById('loadSong');
-    if (wrapper) wrapper.style.display = 'flex';
-    if (loadBtn) {
-      loadBtn.style.display = '';
-      loadBtn.disabled = true;
-    }
+    if (wrapper) wrapper.style.display = 'none';
+    if (loadBtn) loadBtn.style.display = 'none';
   }
 }
 
@@ -655,8 +563,6 @@ function stopPlayback(resetDisplay = true) {
   }
   if (resetDisplay) {
     document.getElementById('currentChord').textContent = '';
-    const cueEl = document.getElementById('currentCue');
-    if (cueEl) cueEl.textContent = '';
   }
   disableStartStopButtons(false);
 }
@@ -714,12 +620,6 @@ function loadChart() {
     alert('Inga sektioner hittades. Kontrollera CSV-formatet.');
     return;
   }
-
-  // tilldela pastellfärger till sektioner
-  sectionColors = sections.map((_, idx) => pastelPalette[idx % pastelPalette.length]);
-  // beräkna mörkare kantfärger för varje sektion
-  sectionBorderColors = sectionColors.map(col => getDarkerColor(col, 0.7));
-
   buildTimeline();
   buildMacroFlow();
   currentSectionIndex = 0;

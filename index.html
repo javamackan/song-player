@@ -15,7 +15,12 @@
     <!-- wrapper för kontrollpanel och toggle-knapp -->
     <div class="controls-wrapper">
       <div class="controls">
-        <!-- Dropdown för att välja fördefinierade låtar från songs.json placeras överst och döljs tillsammans med panelen -->
+        <label for="csvInput">CSV (klistra in):</label>
+        <textarea id="csvInput" rows="6" placeholder="Titel,Tempo\nSection,Bar1,Bar2\nIntro,D .. G,G .. A\nVerse 1,D .. G,Em .. A,D .. G,D .. A"></textarea>
+        <label for="tempo">Tempo (BPM):</label>
+        <input type="number" id="tempo" min="30" max="300" value="120" />
+
+        <!-- Dropdown för att välja fördefinierade låtar från songs.json -->
         <div id="songSelectWrapper" class="song-select">
           <label for="songSelect">Välj låt:</label>
           <select id="songSelect">
@@ -23,12 +28,6 @@
           </select>
           <button id="loadSong" class="toggle-button">Ladda valda låt</button>
         </div>
-        <!-- CSV-input och tempo -->
-        <label for="csvInput">CSV (klistra in):</label>
-        <textarea id="csvInput" rows="6" placeholder="Titel,Tempo\nSection,Bar1,Bar2\nIntro,D .. G,G .. A\nVerse 1,D .. G,Em .. A,D .. G,D .. A"></textarea>
-        <label for="tempo">Tempo (BPM):</label>
-        <input type="number" id="tempo" min="30" max="300" value="120" />
-
         <div class="btn-row">
           <button id="load">Ladda diagram</button>
           <button id="start">Starta</button>
@@ -43,18 +42,14 @@
       </div>
       <button id="toggleControls" class="toggle-controls">Fäll ihop ▲</button>
     </div>
-    <!-- Aktuellt ackord och cue -->
+    <!-- Textrad per sektion: visas ovanför nuvarande ackord och macroflow -->
+    <div id="sectionText" class="section-text"></div>
     <div id="currentChord" class="current-chord"></div>
-    <div id="currentCue" class="current-cue"></div>
-
     <div id="macroFlow" class="macro-flow"></div>
     <div id="microFlow" class="micro-flow">
       <div id="microCurrent" class="micro-row"></div>
       <div id="microNext" class="micro-row"></div>
     </div>
-
-    <!-- Textrad per sektion: visas under ackord och microflow -->
-    <div id="sectionText" class="section-text"></div>
   </main>
   <footer>
     <small>Klicka på sektioner eller takter för att navigera och spela upp.</small>
