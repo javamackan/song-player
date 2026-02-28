@@ -35,6 +35,15 @@
     "name": "08 Wheels and wings",
     "file": "Wheels.csv"
   },
+{
+    "name": "09 Narrowmandland",
+    "file": "Narrow.csv"
+},
+
+{
+    "name": "10 Sign of Victory",
+    "file": "Sign.csv"
+  },
   
  {
     "name": "11 Circle of Trust",
