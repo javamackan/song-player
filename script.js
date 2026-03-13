@@ -13,8 +13,148 @@ let timeline = [];
 let sectionOffsets = [];
 let barOffsets = [];
 let currentSectionIndex = 0;
+// playIndex anger aktuell index i timeline som spelas/visas
 let playIndex = 0;
+// timer används endast för count-in sekvensen
 let timer = null;
+
+// Default tidsignatur (signature) för låten. Om inte satt via CSV antas 4/4.
+// Detta värde uppdateras när en låt laddas in via loadChart.
+let defaultSignature = '4/4';
+
+// scheduleTimes innehåller exakta tidpunkter (ms) för varje beat i timeline relativt start.
+let scheduleTimes = [];
+
+// startTime anger när playback började (performance.now()). Nudge och offset justeras mot denna.
+let startTime = 0;
+
+// ackumulerad offset (ms) för nudging. Positiva värden försenar highlighten, negativa värden snabbar upp.
+let timeOffset = 0;
+
+// referens till animationFrame för vår scheduler-loop. Används för att avbryta på stop.
+let animationFrameId = null;
+
+// Konstanter för nudge-storlek (ms)
+const NUDGE_STEP_MS = 20;
+
+/**
+ * Justerar tiden framåt genom att minska timeOffset. Detta gör att
+ * nästkommande beat triggas tidigare.
+ */
+function nudgeForward() {
+  // minska offset med nudge-steg
+  timeOffset -= NUDGE_STEP_MS;
+}
+
+/**
+ * Justerar tiden bakåt genom att öka timeOffset. Detta fördröjer
+ * nästa beat något.
+ */
+function nudgeBackward() {
+  timeOffset += NUDGE_STEP_MS;
+}
+
+/**
+ * Laddar nästa låt i songsList utan att starta playback. Om sista
+ * låten är aktiv händer ingenting.
+ */
+function loadNextSong() {
+  const selectEl = document.getElementById('songSelect');
+  if (!selectEl || !songsList.length) return;
+  const currentValue = selectEl.value;
+  let currentIndex = songsList.findIndex(s => s.file === currentValue);
+  if (currentIndex < songsList.length - 1) {
+    currentIndex++;
+    selectEl.value = songsList[currentIndex].file;
+    loadSelectedSong();
+  }
+}
+
+/**
+ * Laddar föregående låt i songsList utan att starta playback.
+ */
+function loadPrevSong() {
+  const selectEl = document.getElementById('songSelect');
+  if (!selectEl || !songsList.length) return;
+  const currentValue = selectEl.value;
+  let currentIndex = songsList.findIndex(s => s.file === currentValue);
+  if (currentIndex > 0) {
+    currentIndex--;
+    selectEl.value = songsList[currentIndex].file;
+    loadSelectedSong();
+  }
+}
+
+/**
+ * Kör en beat: highlightar aktuell position och avancerar playIndex. Om
+ * slutet nås stoppas playback.
+ */
+function doPlayStep() {
+  if (playIndex >= timeline.length) {
+    stopPlayback();
+    return;
+  }
+  // highlight current beat
+  highlightPlayback();
+  playIndex++;
+  if (playIndex >= timeline.length) {
+    stopPlayback();
+  }
+}
+
+/**
+ * Scheduler-loop som körs via requestAnimationFrame. Den jämför
+ * aktuell tid mot scheduleTimes och exekverar beat när tiden har
+ * passerat. Efter sista beat stoppas playback.
+ */
+function schedulerLoop() {
+  if (animationFrameId === null) return; // stop if cancelled
+  const now = performance.now();
+  // elapsed tid inklusive nudge-offset
+  const elapsed = now - startTime + timeOffset;
+  // exekvera så många beat som behövs för att komma ikapp
+  while (playIndex < scheduleTimes.length && elapsed >= scheduleTimes[playIndex]) {
+    doPlayStep();
+  }
+  // fortsätt om inte slutet nåtts
+  if (playIndex < scheduleTimes.length) {
+    animationFrameId = requestAnimationFrame(schedulerLoop);
+  }
+}
+
+/**
+ * Startar scheduler från aktuell playIndex. startTime sätts till
+ * performance.now() minus scheduleTimes[playIndex] så att nästa
+ * beat inträffar rätt. timeOffset nollställs.
+ */
+function startScheduler() {
+  startTime = performance.now() - (scheduleTimes[playIndex] || 0);
+  timeOffset = 0;
+  animationFrameId = requestAnimationFrame(schedulerLoop);
+}
+
+/**
+ * Beräknar exakta tidpunkter (ms) för varje beat i timeline baserat på BPM
+ * och barernas subdivision. scheduleTimes[0] = 0, scheduleTimes[i]
+ * anger tiden från start då beat i ska spelas. Vi utgår från att
+ * varje takt motsvarar fyra fjärdedelar (barDuration = 4 * 60000/BPM) och
+ * delar in efter subdivision.
+ * @param {number} bpm slag per minut för fjärdedelar
+ */
+function computeScheduleTimes(bpm) {
+  scheduleTimes = [];
+  const quarterTime = 60000 / (bpm || 120);
+  let total = 0;
+  for (let i = 0; i < timeline.length; i++) {
+    scheduleTimes[i] = total;
+    const step = timeline[i];
+    const barObj = sections[step.section].bars[step.bar];
+    const subdiv = barObj.subdivision || parseSignatureToSubdivision(defaultSignature);
+    // duration för ett sub-steg
+    const stepDuration = quarterTime * 4 / subdiv;
+    total += stepDuration;
+  }
+}
 
 // Pastellfärger för sektioner. Cykla igenom vid behov
 const pastelPalette = [
@@ -94,6 +234,26 @@ function getDarkerColor(hex, factor = 0.7) {
 }
 
 /**
+ * Konverterar en tidsignatur (t.ex. "4/4", "8/4", "12/8") till antal sub-steg per takt.
+ * Vi använder täljaren (num) som antal subdivisioner i en 4/4-takt. Om ogiltigt,
+ * returnerar 4 som standard. Detta gör att 8/4 ger 8 sub-steg (åttondelar) och
+ * 12/8 ger 12 sub-steg (trioler). Användaren kan definiera andra signaturer om
+ * numeratorn är >0. Exempel: 6/8 => 6 sub-steg.
+ * @param {string} signature tidsignatur, t.ex. "4/4". Om null returneras 4.
+ * @returns {number} antal sub-steg i denna takt
+ */
+function parseSignatureToSubdivision(signature) {
+  if (!signature || typeof signature !== 'string') return 4;
+  const parts = signature.split('/');
+  if (parts.length < 2) return 4;
+  const num = parseInt(parts[0], 10);
+  if (!isNaN(num) && num > 0) {
+    return num;
+  }
+  return 4;
+}
+
+/**
  * Parsar CSV-sträng till en 2D-array. Separator autodetekteras.
  */
 function parseCsv(text) {
@@ -139,17 +299,25 @@ function parseSections(csv, startRow) {
     for (let c = 1; c <= barsEndIndex; c++) {
       const cell = (row[c] || '').trim();
       if (!cell) break;
-      // assume no braces inside bar cells
-      // check for cue text in hakparanteser i cell
+      // Bar-def: kan innehålla optional signature-prefix, cue-text i hakparanteser och själva ackorddefinitionen.
       let chordDef = cell;
       let cue = null;
+      // extrahera cue i hakparanteser, t.ex. [trumrullning]
       const cueMatch = chordDef.match(/\[(.*?)\]/);
       if (cueMatch) {
         cue = cueMatch[1].trim();
-        // remove the entire [cue] substring from chordDef
         chordDef = chordDef.replace(cueMatch[0], '').trim();
       }
-      bars.push({ chordDef: chordDef, cue });
+      // extrahera optional signature-override i början, t.ex. "8/4 " eller "12/8 "
+      let subdivisionOverride = null;
+      const sigMatch = chordDef.match(/^(\d+\/\d+)\s+/);
+      if (sigMatch) {
+        subdivisionOverride = sigMatch[1];
+        chordDef = chordDef.slice(sigMatch[0].length).trim();
+      }
+      // beräkna subdivision (antal sub-steg) baserat på override eller global defaultSignature
+      const subdivision = parseSignatureToSubdivision(subdivisionOverride || defaultSignature);
+      bars.push({ chordDef: chordDef, cue, subdivision });
     }
     if (bars.length) {
       result.push({ name, bars, textLines });
@@ -163,7 +331,7 @@ function parseSections(csv, startRow) {
  * behåller föregående ackord, underscore (_) är tystnad. Ingen
  * padding görs.
  */
-function parseBar(barDef) {
+function parseBarLegacy(barDef) {
   // barDef kan vara sträng eller objekt med chordDef
   const chordString = typeof barDef === 'string' ? barDef : (barDef.chordDef || '');
   const normalized = chordString.replace(/\.\./g, '. .');
@@ -182,6 +350,66 @@ function parseBar(barDef) {
 }
 
 /**
+ * Returnerar beats-array för en bar med hänsyn till dess subdivision och '.'-notation.
+ * Om barObj har subdivision N, fördelas tokens över N sub-steg. Punkt (.)
+ * behåller föregående ackord, underscore (_) är tystnad.
+ * @param {object|string} barObj objekt med chordDef, cue och subdivision, eller sträng
+ * @returns {string[]} lista av ackord/paus för varje sub-steg
+ */
+function getBeats(barObj) {
+  let subdivision;
+  let chordString;
+  if (typeof barObj === 'string') {
+    chordString = barObj;
+    subdivision = 4;
+  } else {
+    chordString = barObj.chordDef || '';
+    subdivision = barObj.subdivision || 4;
+  }
+  // normalisera: ersätt ".." med ". ." så att dubbla punkter tolkas som separata tokens
+  const normalized = chordString.replace(/\.{2}/g, '. .');
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  // om inga tokens, returnera tysta sub-steg
+  if (tokens.length === 0) {
+    return Array.from({ length: subdivision }, () => '');
+  }
+  // om antal tokens = subdivision, använd enkel logik med '.' för att hålla
+  if (tokens.length === subdivision) {
+    const beats = [];
+    let last = '';
+    tokens.forEach(tok => {
+      if (tok === '.') {
+        beats.push(last);
+      } else {
+        last = tok;
+        beats.push(tok);
+      }
+    });
+    return beats;
+  }
+  // annars fördela tokens jämnt över subdivision
+  const beats = [];
+  const base = Math.floor(subdivision / tokens.length);
+  let remainder = subdivision % tokens.length;
+  let last = '';
+  tokens.forEach((tok) => {
+    // rep = antal sub-steg för denna token
+    let rep = base + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder--;
+    for (let i = 0; i < rep; i++) {
+      if (tok === '.') {
+        // punkt: behåll föregående ackord
+        beats.push(last);
+      } else {
+        last = tok;
+        beats.push(tok);
+      }
+    }
+  });
+  return beats;
+}
+
+/**
  * Bygger timeline, sectionOffsets och barOffsets med variabla beats.
  */
 function buildTimeline() {
@@ -194,7 +422,7 @@ function buildTimeline() {
     barOffsets[si] = [];
     sec.bars.forEach((barObj, bi) => {
       barOffsets[si][bi] = globalIndex;
-      const beats = parseBar(barObj);
+      const beats = getBeats(barObj);
       beats.forEach((ch, beatIndex) => {
         timeline.push({ section: si, bar: bi, beat: beatIndex, chord: ch });
         globalIndex++;
@@ -211,10 +439,10 @@ function buildMacroFlow() {
   const container = document.getElementById('macroFlow');
   container.innerHTML = '';
   const totalBeats = sections.reduce((sum, s) => {
-    return sum + s.bars.reduce((bsum, barObj) => bsum + parseBar(barObj).length, 0);
+    return sum + s.bars.reduce((bsum, barObj) => bsum + getBeats(barObj).length, 0);
   }, 0);
   sections.forEach((sec, index) => {
-    const beatsInSec = sec.bars.reduce((bsum, barObj) => bsum + parseBar(barObj).length, 0);
+    const beatsInSec = sec.bars.reduce((bsum, barObj) => bsum + getBeats(barObj).length, 0);
     const widthPercent = totalBeats ? (beatsInSec / totalBeats) * 100 : 0;
     const div = document.createElement('div');
     div.className = 'macro-section';
@@ -244,7 +472,7 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length], 0.7);
   barDiv.style.borderColor = borderColor;
   // visa svagt bakgrundsfärg när aktiv: hanteras via CSS .bar.active men vi kan sätta border-färg ovan
-  const beats = parseBar(barObj);
+  const beats = getBeats(barObj);
   const uniqueChords = [...new Set(beats.filter(ch => ch !== ''))];
   if (uniqueChords.length === 1) {
     const chordLabel = uniqueChords[0] === '_' ? '—' : uniqueChords[0];
@@ -444,7 +672,7 @@ function highlightMicro(index) {
       // segment
       const segContainer = barEl.querySelector('.segment-container');
       if (segContainer) {
-        const beats = parseBar(sections[curr.section].bars[curr.bar]);
+        const beats = getBeats(sections[curr.section].bars[curr.bar]);
         const segs = [];
         let c = beats[0];
         let len = 1;
@@ -531,50 +759,77 @@ function highlightPlayback() {
 /**
  * Starta playback med count-in. Pip på varje slag.
  */
+/**
+ * Startar playback med count-in baserat på vald BPM. Vi använder
+ * en exakt schemalagd sekvens av tider (scheduleTimes) för att
+ * eliminera driften från setInterval. Count-in använder en enkel
+ * setInterval med fyra slag innan scheduler startar.
+ */
 function startPlayback() {
   if (!sections.length) return;
+  // stoppa eventuell tidigare uppspelning
+  stopPlayback(false);
   const bpm = parseInt(document.getElementById('tempo').value, 10) || 120;
-  const beatInterval = 60000 / bpm;
+  // räkna ned från 4
   let count = 4;
+  // nollställ playIndex och bygg scheduleTimes
+  playIndex = 0;
+  currentSectionIndex = 0;
+  buildMicroRows(currentSectionIndex);
+  highlightMacro(currentSectionIndex);
+  highlightMicro(playIndex);
+  computeScheduleTimes(bpm);
   disableStartStopButtons(true);
-  const countdown = setInterval(() => {
+  timer = setInterval(() => {
     if (count > 0) {
       playTick();
       document.getElementById('currentChord').textContent = count;
+      document.getElementById('currentCue').textContent = '';
       count--;
     } else {
-      clearInterval(countdown);
+      clearInterval(timer);
+      timer = null;
       document.getElementById('currentChord').textContent = '';
-      playTick();
-      highlightPlayback();
-      timer = setInterval(() => {
-        playIndex++;
-        highlightPlayback();
-      }, beatInterval);
+      document.getElementById('currentCue').textContent = '';
+      // Innan scheduler startas: highlighta aktuell sektion och bar (utan pip).
+      // Highlighta makro och mikro så att användaren ser starten.
+      highlightMacro(currentSectionIndex);
+      highlightMicro(playIndex);
+      // starta scheduler-loop; scheduler kommer spela pip vid första beat
+      startScheduler();
     }
-  }, beatInterval);
+  }, (60000 / bpm));
 }
 
 /**
  * Starta playback från en specifik index utan count-in. Pip startar direkt.
  */
+/**
+ * Startar playback från given playIndex utan count-in. Använder
+ * scheduler-loop med scheduleTimes. Spelar ett pip direkt och
+ * startar highlight från aktuell position.
+ * @param {number} index index i timeline att starta från
+ */
 function startPlaybackFrom(index) {
   if (!sections.length) return;
   const bpm = parseInt(document.getElementById('tempo').value, 10) || 120;
-  const beatInterval = 60000 / bpm;
+  // avbryt tidigare uppspelning
   stopPlayback(false);
+  // sätt playIndex och uppdatera currentSectionIndex
   playIndex = index;
-  currentSectionIndex = timeline[index] ? timeline[index].section : 0;
+  const curr = timeline[playIndex];
+  currentSectionIndex = curr ? curr.section : 0;
   buildMicroRows(currentSectionIndex);
   highlightMacro(currentSectionIndex);
   highlightMicro(playIndex);
+  // beräkna nya scheduleTimes
+  computeScheduleTimes(bpm);
   disableStartStopButtons(true);
-  // spela pip omedelbart
-  playTick();
-  timer = setInterval(() => {
-    playIndex++;
-    highlightPlayback();
-  }, beatInterval);
+  // highlighta bar och makro utan pip; scheduler kommer spela pip första gången
+  highlightMacro(currentSectionIndex);
+  highlightMicro(playIndex);
+  // starta scheduler-loop
+  startScheduler();
 }
 
 /**
@@ -649,10 +904,18 @@ async function loadSelectedSong() {
  * Stoppar playback och återställer knappar. Optionellt tömmer display.
  */
 function stopPlayback(resetDisplay = true) {
+  // avbryt eventuella setInterval countdown eller äldre timers
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  // avbryt scheduler-loop
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  // nollställ tidsjustering
+  timeOffset = 0;
   if (resetDisplay) {
     document.getElementById('currentChord').textContent = '';
     const cueEl = document.getElementById('currentCue');
@@ -688,12 +951,17 @@ function loadChart() {
   let csv = parseCsv(raw);
   let title = '';
   let tempoFromCsv = null;
-  // meta-detektion
+  let signatureFromCsv = null;
+  // meta-detektion: rad 0 kan innehålla titel, tempo och optional signature
   if (csv.length > 0 && csv[0].length > 1) {
     const maybeTempo = parseInt(csv[0][1], 10);
+    // detect tempo in second cell and optional signature in third cell
     if (!isNaN(maybeTempo)) {
       title = csv[0][0] || '';
       tempoFromCsv = maybeTempo;
+      if (csv[0].length > 2 && csv[0][2]) {
+        signatureFromCsv = csv[0][2].trim();
+      }
       csv.shift();
     }
   }
@@ -709,6 +977,8 @@ function loadChart() {
   if (tempoFromCsv) {
     document.getElementById('tempo').value = tempoFromCsv;
   }
+  // sätt defaultSignature baserat på metadata från CSV eller behåll tidigare. Om signatureFromCsv finns använd den.
+  defaultSignature = signatureFromCsv || '4/4';
   sections = parseSections(csv, 0);
   if (!sections.length) {
     alert('Inga sektioner hittades. Kontrollera CSV-formatet.');
@@ -868,4 +1138,44 @@ document.addEventListener('DOMContentLoaded', () => {
       loadSelectedSong();
     });
   }
+
+  // Globala tangentbordslyssnare för pedal/nudge och navigering.
+  document.addEventListener('keydown', (e) => {
+    // ignorera tangenter när fokus är i input eller textarea
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowRight':
+        // nudge framåt
+        nudgeForward();
+        e.preventDefault();
+        break;
+      case 'ArrowLeft':
+        // nudge bakåt
+        nudgeBackward();
+        e.preventDefault();
+        break;
+      case 'PageDown':
+        // ladda nästa låt utan att starta
+        loadNextSong();
+        e.preventDefault();
+        break;
+      case 'PageUp':
+        // ladda föregående låt utan att starta
+        loadPrevSong();
+        e.preventDefault();
+        break;
+      case ' ': // mellanslag
+      case 'Spacebar':
+      case 'Space':
+        // starta aktuell låt (från början)
+        startPlayback();
+        e.preventDefault();
+        break;
+      default:
+        break;
+    }
+  });
 });
