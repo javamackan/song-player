@@ -149,9 +149,14 @@ function computeScheduleTimes(bpm) {
     scheduleTimes[i] = total;
     const step = timeline[i];
     const barObj = sections[step.section].bars[step.bar];
+    // subdivision (number of sub-steps) for this bar
     const subdiv = barObj.subdivision || parseSignatureToSubdivision(defaultSignature);
-    // duration för ett sub-steg
-    const stepDuration = quarterTime * 4 / subdiv;
+    // Determine the number of beats (quarter notes) this bar should span.
+    // Bars with subdivision >= 4 keep a length of 4 quarter notes, while bars
+    // with subdivision < 4 (e.g. 2/4, 3/4) have length equal to subdiv quarter notes.
+    const barBeats = subdiv < 4 ? subdiv : 4;
+    // duration for one sub-step
+    const stepDuration = quarterTime * barBeats / subdiv;
     total += stepDuration;
   }
 }
@@ -480,15 +485,6 @@ function createBarElement(sectionIndex, barIndex, barObj) {
     sc.className = 'single-chord';
     sc.textContent = chordLabel;
     barDiv.appendChild(sc);
-    const pips = document.createElement('div');
-    pips.className = 'beat-pips';
-    for (let i = 0; i < beats.length; i++) {
-      const pip = document.createElement('div');
-      pip.className = 'pip';
-      pip.dataset.beatIndex = i;
-      pips.appendChild(pip);
-    }
-    barDiv.appendChild(pips);
   } else {
     // komprimera sekvenser
     const segments = [];
@@ -516,16 +512,21 @@ function createBarElement(sectionIndex, barIndex, barObj) {
       segContainer.appendChild(segDiv);
     });
     barDiv.appendChild(segContainer);
-    const pips = document.createElement('div');
-    pips.className = 'beat-pips';
-    for (let i = 0; i < beats.length; i++) {
-      const pip = document.createElement('div');
-      pip.className = 'pip';
-      pip.dataset.beatIndex = i;
-      pips.appendChild(pip);
-    }
-    barDiv.appendChild(pips);
   }
+  // generera pips baserat på pulses (kvartspuls) snarare än subdivision
+  const subdiv = barObj && barObj.subdivision ? barObj.subdivision : parseSignatureToSubdivision(defaultSignature);
+  const pulses = subdiv < 4 ? subdiv : 4;
+  const pips = document.createElement('div');
+  pips.className = 'beat-pips';
+  for (let i = 0; i < pulses; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'pip';
+    // beräkna vilket subbeat-index denna pip representerar (så att highlight träffar kvartspulsen)
+    const pulseBeatIndex = Math.floor(i * subdiv / pulses);
+    pip.dataset.pulseIndex = pulseBeatIndex;
+    pips.appendChild(pip);
+  }
+  barDiv.appendChild(pips);
   // lägg till cue-text om definierad för bar
   if (barObj && barObj.cue) {
     const cueDiv = document.createElement('div');
@@ -662,10 +663,11 @@ function highlightMicro(index) {
     const bi = parseInt(barEl.dataset.barIndex, 10);
     if (si === curr.section && bi === curr.bar) {
       barEl.classList.add('active');
-      // pips
+      // markera pipar (kvartspuls) för denna bar
       const pips = barEl.querySelectorAll('.pip');
       pips.forEach(pip => {
-        if (parseInt(pip.dataset.beatIndex, 10) === curr.beat) {
+        const pulseIndex = parseInt(pip.dataset.pulseIndex, 10);
+        if (pulseIndex === curr.beat) {
           pip.classList.add('active');
         }
       });
@@ -741,8 +743,15 @@ function highlightPlayback() {
     stopPlayback();
     return;
   }
-  // spela pip först
-  playTick();
+  // spela pip endast på kvartspuls (steg där beat är lika med pulse-index)
+  const barObj = sections[curr.section].bars[curr.bar];
+  const subdiv = barObj.subdivision || parseSignatureToSubdivision(defaultSignature);
+  const pulses = subdiv < 4 ? subdiv : 4;
+  const stepPerPulse = Math.floor(subdiv / pulses);
+  // stepPerPulse kan vara 0 om pulses == subdiv, men vi vill beep varje beat i det fallet
+  if (stepPerPulse === 0 || curr.beat % stepPerPulse === 0) {
+    playTick();
+  }
   if (curr.section !== currentSectionIndex) {
     currentSectionIndex = curr.section;
     buildMicroRows(currentSectionIndex);
