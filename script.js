@@ -43,7 +43,7 @@ const NUDGE_STEP_MS = 80;
  */
 function nudgeForward() {
   // minska offset med nudge-steg
-  timeOffset -= NUDGE_STEP_MS;
+  timeOffset += NUDGE_STEP_MS;
 }
 
 /**
@@ -51,7 +51,7 @@ function nudgeForward() {
  * nästa beat något.
  */
 function nudgeBackward() {
-  timeOffset += NUDGE_STEP_MS;
+  timeOffset -= NUDGE_STEP_MS;
 }
 
 /**
