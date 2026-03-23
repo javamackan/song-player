@@ -34,7 +34,7 @@ let timeOffset = 0;
 // referens till animationFrame för vår scheduler-loop. Används för att avbryta på stop.
 let animationFrameId = null;
 
-// Konstanter för nudge-storlek (ms)
+// Konstanter för nudge-storlek (ms). Justeras till 80 ms enligt v23 krav
 const NUDGE_STEP_MS = 80;
 
 /**
@@ -42,13 +42,13 @@ const NUDGE_STEP_MS = 80;
  * nästkommande beat triggas tidigare.
  */
 function nudgeForward() {
-  // minska offset med nudge-steg
+  // öka offset med nudge-steg gör spelningen långsammare
   timeOffset += NUDGE_STEP_MS;
 }
 
 /**
- * Justerar tiden bakåt genom att öka timeOffset. Detta fördröjer
- * nästa beat något.
+ * Justerar tiden bakåt genom att minska timeOffset. Detta gör att nästa
+ * beat triggas tidigare, vilket hjälper att komma ikapp.
  */
 function nudgeBackward() {
   timeOffset -= NUDGE_STEP_MS;
@@ -163,12 +163,13 @@ function computeScheduleTimes(bpm) {
 
 // Pastellfärger för sektioner. Cykla igenom vid behov
 const pastelPalette = [
-  '#f7f0fa', // lavender blush
-  '#f0f7ff', // light blue
-  '#f9f5ea', // ivory
-  '#eefaf5', // mint
-  '#fff7f0', // light peach
-  '#f5f5e8'  // very light beige
+  // mer mättade pasteller för tydligare makrosektioner
+  '#e6c1ff', // ljus lavendel
+  '#cce8ff', // ljus himmel
+  '#ffe8bb', // smörgul
+  '#c0f5e8', // mintgrön
+  '#ffdecc', // persika
+  '#e8e8c0'  // ljus oliv
 ];
 // Tilldelade färger per sektion (fylls i loadChart)
 let sectionColors = [];
@@ -177,8 +178,9 @@ let sectionColors = [];
 let sectionBorderColors = [];
 
 // Metronom och autoscroll
-let metronomeEnabled = true;
-let autoScrollEnabled = false;
+// Metronomen är avstängd som default; autoscroll är påslagen som default enligt v23
+let metronomeEnabled = false;
+let autoScrollEnabled = true;
 
 // Synlighet för sektionstexter och flagga om det finns sådana
 // hasSectionText blir true om minst en sektion har text definierad i CSV
@@ -188,6 +190,65 @@ let textVisible = true;
 
 // Lista över låtar som kan väljas via dropdown
 let songsList = [];
+
+/**
+ * Kontrollerar URL-parametrar och laddar en låt automatiskt om
+ * parametern song eller file finns. Parametern kan vara namn (name)
+ * eller filnamn. Körs efter att songsList har laddats.
+ */
+function handleDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const target = params.get('song') || params.get('file');
+  if (!target || !songsList || !songsList.length) return;
+  // jämför både filnamn och namnet (case-insensitive)
+  const lowerTarget = target.toLowerCase();
+  const found = songsList.find(s => {
+    const fileMatch = (s.file || '').toLowerCase() === lowerTarget;
+    const nameMatch = (s.name || '').toLowerCase() === lowerTarget;
+    return fileMatch || nameMatch;
+  });
+  if (found) {
+    const selectEl = document.getElementById('songSelect');
+    if (selectEl) {
+      selectEl.value = found.file;
+      // ladda låt men starta inte
+      loadSelectedSong();
+    }
+  }
+}
+
+/**
+ * Uppdaterar föregående/nästa-knapparnas titel och inaktiveringsstatus
+ * baserat på aktuell låt i dropdown. Visar namnet på låtarna som
+ * förhandsvisning.
+ */
+function updateSongButtons() {
+  const selectEl = document.getElementById('songSelect');
+  const prevBtn = document.getElementById('prevSong');
+  const nextBtn = document.getElementById('nextSong');
+  if (!selectEl || !prevBtn || !nextBtn || !songsList.length) return;
+  const currentFile = selectEl.value;
+  const currentIndex = songsList.findIndex(s => s.file === currentFile);
+  // Föregående
+  if (currentIndex > 0) {
+    prevBtn.disabled = false;
+    const prevName = songsList[currentIndex - 1].name || songsList[currentIndex - 1].file;
+    // visa namnet som liten etikett under ikonen
+    prevBtn.innerHTML = '⏮<br><span class="hint">' + prevName + '</span>';
+  } else {
+    prevBtn.disabled = true;
+    prevBtn.innerHTML = '⏮<br><span class="hint">&nbsp;</span>';
+  }
+  // Nästa
+  if (currentIndex >= 0 && currentIndex < songsList.length - 1) {
+    nextBtn.disabled = false;
+    const nextName = songsList[currentIndex + 1].name || songsList[currentIndex + 1].file;
+    nextBtn.innerHTML = '⏭<br><span class="hint">' + nextName + '</span>';
+  } else {
+    nextBtn.disabled = true;
+    nextBtn.innerHTML = '⏭<br><span class="hint">&nbsp;</span>';
+  }
+}
 
 // AudioContext för metronompip
 let audioCtx = null;
@@ -868,7 +929,8 @@ async function loadSongList() {
       opt.textContent = song.name || song.file;
       selectEl.appendChild(opt);
     });
-    const wrapper = document.getElementById('songSelectWrapper');
+    // Visa eller dölj raden med låtval. Vi använder songControls som wrapper
+    const wrapper = document.getElementById('songControls');
     const loadBtn = document.getElementById('loadSong');
     // Visa alltid dropdown och knapp; om inga låtar finns, inaktivera knappen
     if (wrapper) wrapper.style.display = 'flex';
@@ -876,16 +938,22 @@ async function loadSongList() {
       loadBtn.style.display = '';
       loadBtn.disabled = songsList.length === 0;
     }
+    // uppdatera hint på navigeringsknappar
+    updateSongButtons();
+    // hantera eventuell djuplänk
+    handleDeepLink();
   } catch (e) {
     // misslyckades att hämta listan; visa ändå dropdown men inaktivera knapp
     console.error('Kunde inte läsa songs.json', e);
-    const wrapper = document.getElementById('songSelectWrapper');
+    const wrapper = document.getElementById('songControls');
     const loadBtn = document.getElementById('loadSong');
     if (wrapper) wrapper.style.display = 'flex';
     if (loadBtn) {
       loadBtn.style.display = '';
       loadBtn.disabled = true;
     }
+    // uppdatera hint även vid fel
+    updateSongButtons();
   }
 }
 
@@ -904,6 +972,8 @@ async function loadSelectedSong() {
     document.getElementById('csvInput').value = csvText.trim();
     // ladda diagrammet automatiskt
     loadChart();
+    // uppdatera navigeringsknapparnas titel/hint
+    updateSongButtons();
   } catch (e) {
     console.error('Kunde inte läsa vald låt', e);
     alert('Kunde inte läsa vald låt: ' + filename);
@@ -1011,15 +1081,16 @@ function loadChart() {
   // visa eller dölj textknapp beroende på om sektionstext finns
   const textBtn = document.getElementById('textToggle');
   if (hasSectionText) {
-    // det finns text i någon sektion – visa knappen och sätt aktivt läge
-    textVisible = true;
+    // text finns – visa knappen, sätt aktiv enligt textVisible
     textBtn.style.display = '';
-    textBtn.textContent = 'Text på';
+    textVisible = true;
     textBtn.classList.add('active');
+    textBtn.classList.remove('off');
+    textBtn.title = 'Text på';
     // bygg text för första sektionen
     buildSectionText(currentSectionIndex);
   } else {
-    // ingen sektionstext – dölj knappen och textcontainern
+    // ingen sektionstext – göm knappen och textcontainer
     textVisible = false;
     textBtn.style.display = 'none';
     const sectionTextEl = document.getElementById('sectionText');
@@ -1033,14 +1104,28 @@ function loadChart() {
 /**
  * Toggla kollapsning av kontrollpanelen.
  */
-function toggleControls() {
-  const controls = document.querySelector('.controls');
-  controls.classList.toggle('collapsed');
-  const toggleBtn = document.getElementById('toggleControls');
-  if (controls.classList.contains('collapsed')) {
-    toggleBtn.textContent = 'Visa panel ▼';
+/**
+ * Togglar visningen av redigeringspanelen (CSV och tempo). Detta
+ * påverkar inte de övriga kontrollraderna (spelare, toggles).
+ */
+function toggleEditorPanel() {
+  // Toggla visningen av både låtval och redigeringspanel så att de döljs
+  const panel = document.getElementById('editorPanel');
+  const song = document.getElementById('songControls');
+  const isCollapsed = panel.classList.contains('collapsed');
+  if (isCollapsed) {
+    // expandera
+    panel.classList.remove('collapsed');
+    if (song) song.classList.remove('collapsed');
   } else {
-    toggleBtn.textContent = 'Fäll ihop ▲';
+    panel.classList.add('collapsed');
+    if (song) song.classList.add('collapsed');
+  }
+  const btn = document.getElementById('toggleEditor');
+  if (panel.classList.contains('collapsed')) {
+    btn.textContent = 'Visa editor ▼';
+  } else {
+    btn.textContent = 'Fäll ihop ▲';
   }
 }
 
@@ -1048,14 +1133,18 @@ function toggleControls() {
  * Toggla metronom. Uppdaterar knappens text och active-klass.
  */
 function toggleMetronome() {
+  // växla metronomläge
   metronomeEnabled = !metronomeEnabled;
   const btn = document.getElementById('metronomeToggle');
+  // Ikonen förblir densamma (🔔). Lägg till eller ta bort active/off-klasser
   if (metronomeEnabled) {
-    btn.textContent = 'Metronom på';
     btn.classList.add('active');
+    btn.classList.remove('off');
+    btn.title = 'Metronom på';
   } else {
-    btn.textContent = 'Metronom av';
     btn.classList.remove('active');
+    btn.classList.add('off');
+    btn.title = 'Metronom av';
   }
 }
 
@@ -1063,14 +1152,17 @@ function toggleMetronome() {
  * Toggla autoscroll. Uppdaterar knappens text och active-klass.
  */
 function toggleAutoScroll() {
+  // växla autoscroll
   autoScrollEnabled = !autoScrollEnabled;
   const btn = document.getElementById('scrollToggle');
   if (autoScrollEnabled) {
-    btn.textContent = 'Autoscroll på';
     btn.classList.add('active');
+    btn.classList.remove('off');
+    btn.title = 'Autoscroll på';
   } else {
-    btn.textContent = 'Autoscroll av';
     btn.classList.remove('active');
+    btn.classList.add('off');
+    btn.title = 'Autoscroll av';
   }
 }
 
@@ -1083,11 +1175,13 @@ function toggleText() {
   textVisible = !textVisible;
   const btn = document.getElementById('textToggle');
   if (textVisible) {
-    btn.textContent = 'Text på';
     btn.classList.add('active');
+    btn.classList.remove('off');
+    btn.title = 'Text på';
   } else {
-    btn.textContent = 'Text av';
     btn.classList.remove('active');
+    btn.classList.add('off');
+    btn.title = 'Text av';
   }
   // uppdatera textsektionen för aktuell sektion
   buildSectionText(currentSectionIndex);
@@ -1132,12 +1226,50 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('stop').addEventListener('click', () => {
     stopPlayback();
   });
-  document.getElementById('toggleControls').addEventListener('click', toggleControls);
+  // toggla redigeringspanelen (csv/tempo)
+  document.getElementById('toggleEditor').addEventListener('click', toggleEditorPanel);
 
   // metronom- och autoscroll-lyssnare
   document.getElementById('metronomeToggle').addEventListener('click', toggleMetronome);
   document.getElementById('scrollToggle').addEventListener('click', toggleAutoScroll);
   document.getElementById('textToggle').addEventListener('click', toggleText);
+
+  // init-knappar med default states för metronom, autoscroll och text
+  // Metronom av som default
+  const metBtn = document.getElementById('metronomeToggle');
+  if (metronomeEnabled) {
+    metBtn.classList.add('active');
+    metBtn.classList.remove('off');
+    metBtn.title = 'Metronom på';
+  } else {
+    metBtn.classList.remove('active');
+    metBtn.classList.add('off');
+    metBtn.title = 'Metronom av';
+  }
+  // Autoscroll på som default
+  const scrollBtn = document.getElementById('scrollToggle');
+  if (autoScrollEnabled) {
+    scrollBtn.classList.add('active');
+    scrollBtn.classList.remove('off');
+    scrollBtn.title = 'Autoscroll på';
+  } else {
+    scrollBtn.classList.remove('active');
+    scrollBtn.classList.add('off');
+    scrollBtn.title = 'Autoscroll av';
+  }
+  // Textknapp: inaktiverad tills en låt laddas, men sätt initial titel och state
+  const textBtn = document.getElementById('textToggle');
+  // initialisera textToggle: om ingen text finns än så gör den grå
+  if (hasSectionText && textVisible) {
+    textBtn.classList.add('active');
+    textBtn.classList.remove('off');
+    textBtn.title = 'Text på';
+  } else {
+    textBtn.classList.remove('active');
+    textBtn.classList.add('off');
+    textBtn.title = 'Text';
+  }
+  textBtn.title = 'Text på/av';
 
   // ladda songlist och sätt upp lyssnare på laddningsknapp
   loadSongList();
@@ -1145,6 +1277,27 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loadSongBtn) {
     loadSongBtn.addEventListener('click', () => {
       loadSelectedSong();
+    });
+  }
+  // när dropdown ändras, uppdatera hint och av/på-läge för nästa/föregående
+  const selectEl = document.getElementById('songSelect');
+  if (selectEl) {
+    selectEl.addEventListener('change', () => {
+      updateSongButtons();
+    });
+  }
+
+  // Navigeringsknappar för låtlista
+  const prevBtn = document.getElementById('prevSong');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      loadPrevSong();
+    });
+  }
+  const nextBtn = document.getElementById('nextSong');
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      loadNextSong();
     });
   }
 

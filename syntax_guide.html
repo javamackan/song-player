@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChordFlow – Syntaxguide</title>
+  <style>
+    body {
+      font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f8f9fb;
+      color: #2a2a2a;
+      line-height: 1.5;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 0.6rem;
+      color: #2c3e50;
+    }
+    h2 {
+      font-size: 1.3rem;
+      margin-top: 1.2rem;
+      margin-bottom: 0.3rem;
+      color: #2c3e50;
+    }
+    code {
+      background: #eef2f7;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+    }
+    pre {
+      background: #eef2f7;
+      padding: 0.6rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    ul {
+      padding-left: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>ChordFlow – Syntaxguide</h1>
+  <p>Den här guiden sammanfattar de olika delarna i CSV‑formatet som används av ChordFlow. Använd den som referens när du skapar eller redigerar låtar.</p>
+
+  <h2>1. Metadata</h2>
+  <p>Den första raden i CSV-filen innehåller metadata och styr grunderna för låten:</p>
+  <ul>
+    <li><strong>Titel</strong> – namnet på låten. Visas högst upp på sidan.</li>
+    <li><strong>Tempo (BPM)</strong> – ett heltal som anger hastigheten. Exempel: <code>120</code>.</li>
+    <li><strong>Signature</strong> (valfri) – tidsignaturen för låten. Default är <code>4/4</code> om den utelämnas. Du kan använda <code>8/4</code> för åttondelar och <code>12/8</code> för trioler. Exempel på metadata‑rad:</li>
+  </ul>
+  <pre>My&nbsp;Song,120,8/4</pre>
+
+  <h2>2. Sektioner och takter</h2>
+  <p>Varje efterföljande rad representerar en sektion i låten (t.ex. <em>Intro</em>, <em>Verse&nbsp;1</em>). Den första kolumnen är sektionens namn. De övriga kolumnerna representerar takter i sektionen. En tom cell markerar slutet på sektionen. Exempel:</p>
+  <pre>Verse&nbsp;1,D&nbsp;.&nbsp;.&nbsp;A,G&nbsp;.&nbsp;.&nbsp;D,,&#10;Chorus,G&nbsp;C,&nbsp;,&nbsp;</pre>
+
+  <h2>3. Ackord och beats</h2>
+  <p>Inuti varje takt skriver du ackorden och deras längd. Grundregler:</p>
+  <ul>
+    <li>Alla värden i en cell separeras med mellanslag.</li>
+    <li>Ett ackord (t.ex. <code>A</code> eller <code>Dmaj7</code>) tar 1 subslag.</li>
+    <li><code>.</code> håller (repeterar) föregående ackord.</li>
+    <li><code>_</code> markerar tystnad under ett subslag.</li>
+    <li>Antalet subslag per takt styrs av tidsignaturen. Exempel: <code>4/4</code> → 4 subslag (fjärdedelar); <code>8/4</code> → 8 subslag (åttondelar); <code>12/8</code> → 12 subslag (trioler); <code>2/4</code> → 2 subslag (halv takt).</li>
+    <li>Om tidsignaturen är <code>8/4</code> men cellen bara innehåller 4 värden, fylls varje värde ut över två subslag.</li>
+  </ul>
+  <p>Exempel på olika taktarter:</p>
+  <pre>4/4&nbsp;: D&nbsp;.&nbsp;.&nbsp;A        # D hålls över tre slag, A på fjärde&#10;8/4&nbsp;: A&nbsp;.&nbsp;.&nbsp;.&nbsp;C&nbsp;G&nbsp;F#&nbsp;.   # åtta subslag&#10;12/8: Dm&nbsp;C&nbsp;A&nbsp;B&#x266D;&nbsp;G&nbsp;_.&nbsp;_.&nbsp;_.&nbsp;_.&nbsp;_.&nbsp;_. # trioler&#10;2/4&nbsp;: G&nbsp;.             # halvt så lång som en 4/4-takt</pre>
+
+  <h2>4. Cue‑text</h2>
+  <p>Du kan lägga till en kort instruktion eller cue i slutet av en takt genom att omsluta den med hakparanteser. Cue‑texten visas under ackordet i mikroflödet och i fältet för aktuell ackord när takten spelas. Exempel:</p>
+  <pre>A&nbsp;.&nbsp;D&nbsp;. [trumrullning]</pre>
+
+  <h2>5. Sektionstext (lyrics)</h2>
+  <p>Om du vill visa text (t.ex. lyrics) för en sektion lägger du den i den sista cellen i sektionen, omgiven av klamrar <code>{}</code>. Använd <code>=</code> för att separera rader. Exempel:</p>
+  <pre>Chorus,G&nbsp;C&nbsp;G&nbsp;D,{Oh&nbsp;yes&nbsp;this&nbsp;time=I&nbsp;promise&nbsp;myself}</pre>
+  <p>Texten visas som ett block under mikroflödet när sektionen är aktiv. Den nästkommande sektionens första rad visas i kursiv stil som förhandsvisning. Om en sektion saknar text visas inget textblock.</p>
+
+  <h2>6. Tidsignatur (signature)</h2>
+  <p>Standardtidsignaturen bestäms av tredje värdet i metadata-raden. Du kan åsidosätta den för en enskild takt genom att skriva tidsignaturen först i cellen, följt av ett mellanslag och ackorden. Exempel:</p>
+  <pre>2/4&nbsp;D&nbsp;.&#10;8/4&nbsp;A&nbsp;.&nbsp;.&nbsp;C&nbsp;G&#10;12/8&nbsp;Dm&nbsp;C&nbsp;A&nbsp;G&nbsp;F&nbsp;E&nbsp;D</pre>
+
+  <h2>7. Filhantering och setlist</h2>
+  <ul>
+    <li>Alla låtar lagras som CSV-filer. Lista dem i filen <code>songs.json</code> med objekt som innehåller <code>name</code> (visningsnamn) och <code>file</code> (filnamn). Filen används för dropdown-listan.</li>
+    <li>Låtarna sorteras alfabetiskt efter namn och utgör din setlist. Du kan navigera med piltangenter eller knappar.</li>
+  </ul>
+
+  <h2>8. Djup‑länkar</h2>
+  <p>Du kan skicka en länk som laddar en specifik låt automatiskt. Lägg till parametern <code>?song=</code> eller <code>?file=</code> i URL:en:</p>
+  <pre>https://exempel.se/index.html?song=MySong&#10;https://exempel.se/index.html?file=02_minsuperlåt.csv</pre>
+  <p>Parameter värdet matchar antingen låtnamnet (name) eller filnamnet (file). Sidan laddar låten men startar inte spelningen förrän du trycker på startknappen.</p>
+
+  <h2>9. Tangentbordsstyrning och nudging</h2>
+  <ul>
+    <li><strong>Högerpil</strong> – snabbar upp spelningen genom att flytta fram tidslinjen med 80&nbsp;ms (nudge).</li>
+    <li><strong>Vänsterpil</strong> – saktar ned spelningen genom att flytta bak tidslinjen med 80&nbsp;ms.</li>
+    <li><strong>Page&nbsp;Down</strong> – laddar nästa låt i setlisten (startar inte).</li>
+    <li><strong>Page&nbsp;Up</strong> – laddar föregående låt i setlisten (startar inte).</li>
+    <li><strong>Mellanslag</strong> – startar aktuell låt med inräkning.</li>
+  </ul>
+
+  <h2>10. Panelkontroller</h2>
+  <p>I kontrollraden finns tre knappar:</p>
+  <ul>
+    <li>🔔 – Metronom. När den är aktiv hör du ett pip på varje fjärdedel. Knappen lyser starkt när den är på och gråar ut när den är av. Metronomen är avstängd som standard.</li>
+    <li>⇆ – Autoscroll. När den är aktiv rullar sidan automatiskt så att aktuell takt/sektion alltid är synlig. Autoscroll är påslagen som standard.</li>
+    <li>𝓣 – Text. Visar eller döljer sektionstexten (lyrics). Knappen är inaktiv om ingen sektionstext finns i låten.</li>
+  </ul>
+
+  <p>Fäll‑ihop‑knappen döljer redigeringsraden (låtval, CSV och tempo). Spelarknapparna och kontrollknapparna är alltid synliga.</p>
+
+  <p>Lycka till med dina arrangemang och live‑sessioner!</p>
+</body>
+</html>

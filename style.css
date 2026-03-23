@@ -30,7 +30,7 @@ main {
   margin: 0 auto;
 }
 
-/* Kontrollpanel med wrapper för kollapsning */
+/* Kontrollpanel wrapper – allt som gäller kontroller, låtval, spelare, toggles och editor */
 .controls-wrapper {
   position: relative;
   margin-bottom: 1rem;
@@ -38,28 +38,117 @@ main {
   border-radius: 10px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   padding: 1.2rem 1rem;
-}
-.controls {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
-.controls.collapsed {
-  display: none;
+
+/* Rader för låtval, spelare och toggles */
+.song-controls,
+.player-controls,
+.control-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
-.toggle-controls {
-  margin-top: 0.5rem;
+
+/* Spelarknappar och kontrollknappar */
+.song-btn,
+.player-btn,
+.control-btn,
+.editor-btn {
+  padding: 0.4rem 0.7rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #2a5873;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+.song-btn:hover,
+.player-btn:hover,
+.control-btn:hover,
+.editor-btn:hover {
+  background: #214b62;
+}
+.player-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Gör spelarknapparna större för bättre synlighet */
+.player-controls .player-btn {
+  font-size: 1.25rem;
+  padding: 0.35rem 0.8rem;
+}
+
+/* Placera ikon över och hint under inne i spelarknappen */
+.player-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.player-btn .hint {
+  font-size: 0.6rem;
+  line-height: 1;
+  margin-top: 0.1rem;
+  color: #f0f0f0; /* ljus textfärg för bättre kontrast på mörk bakgrund */
+}
+
+/* Gör toggelknapparnas ikoner något större */
+.control-toggles .control-btn {
+  font-size: 1.2rem;
+  padding: 0.35rem 0.8rem;
+}
+
+/* Aktiv status på kontrollknappar (t.ex. scroll på) */
+.control-btn.active {
+  background: #214b62;
+}
+
+/* Inaktiv state på kontrollknappar (metronom, scroll, text) – visa utgråad när funktionen är av */
+.control-btn.off {
+  opacity: 0.45;
+}
+
+/* Editor-panel: innehåller CSV och tempo */
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Knapp för att fälla ihop redigeringspanelen */
+.toggle-editor {
+  margin-top: 0.4rem;
   padding: 0.4rem 0.8rem;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   border: none;
   border-radius: 6px;
   background: #2c3e50;
-  color: #fff;
+  color: white;
   cursor: pointer;
+  align-self: flex-start;
   transition: background 0.2s ease;
 }
-.toggle-controls:hover {
+.toggle-editor:hover {
   background: #24374a;
+}
+
+/* Collapsed editor: hide only editor-panel */
+.editor-panel.collapsed {
+  display: none;
+}
+
+/* Dölj låtval när panelen är kollapsad */
+.song-controls.collapsed {
+  display: none;
 }
 
 .controls label {

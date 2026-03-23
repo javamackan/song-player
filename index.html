@@ -14,34 +14,41 @@
   <main>
     <!-- wrapper för kontrollpanel och toggle-knapp -->
     <div class="controls-wrapper">
-      <div class="controls">
-        <!-- Dropdown för att välja fördefinierade låtar från songs.json placeras överst och döljs tillsammans med panelen -->
-        <div id="songSelectWrapper" class="song-select">
-          <label for="songSelect">Välj låt:</label>
-          <select id="songSelect">
-            <option value="">-- välj låt --</option>
-          </select>
-          <button id="loadSong" class="toggle-button">Ladda valda låt</button>
-        </div>
-        <!-- CSV-input och tempo -->
+      <!-- Låtval och låtlista -->
+      <div id="songControls" class="song-controls">
+        <label for="songSelect">Välj låt:</label>
+        <select id="songSelect">
+          <option value="">-- välj låt --</option>
+        </select>
+        <button id="loadSong" class="song-btn">Ladda valda låt</button>
+      </div>
+      <!-- Redigeringspanel: CSV-data och tempo -->
+      <div id="editorPanel" class="editor-panel">
         <label for="csvInput">CSV (klistra in):</label>
         <textarea id="csvInput" rows="6" placeholder="Titel,Tempo,Signature\nSection,Bar1,Bar2\nIntro,D .. G,G .. A\nVerse 1,D .. G,Em .. A,D .. G,D .. A"></textarea>
         <label for="tempo">Tempo (BPM):</label>
         <input type="number" id="tempo" min="30" max="300" value="120" />
-
         <div class="btn-row">
-          <button id="load">Ladda diagram</button>
-          <button id="start">Starta</button>
-          <button id="stop" disabled>Stopp</button>
-        </div>
-        <!-- rad för togglar -->
-        <div class="toggle-row">
-          <button id="metronomeToggle" class="toggle-button">Metronom på</button>
-          <button id="scrollToggle" class="toggle-button">Autoscroll av</button>
-          <button id="textToggle" class="toggle-button">Text på</button>
+          <button id="load" class="editor-btn">Ladda diagram</button>
+          <!-- Länk till syntaxguide för CSV-format -->
+          <a href="syntax_guide.html" target="_blank" class="editor-btn" id="guideLink">Syntax&nbsp;guide</a>
         </div>
       </div>
-      <button id="toggleControls" class="toggle-controls">Fäll ihop ▲</button>
+      <!-- Knapp för att fälla ihop eller expandera redigerings- och låt-panelen -->
+      <button id="toggleEditor" class="toggle-editor">Fäll ihop ▲</button>
+      <!-- Spelarkontroller: föregående, stopp, start, nästa -->
+      <div id="playerControls" class="player-controls">
+        <button id="prevSong" class="player-btn" title="Föregående låt">⏮</button>
+        <button id="stop" class="player-btn" title="Stopp" disabled>⏹</button>
+        <button id="start" class="player-btn" title="Start">▶</button>
+        <button id="nextSong" class="player-btn" title="Nästa låt">⏭</button>
+      </div>
+      <!-- Kontrollknappar för metronom, scroll och text -->
+      <div id="controlToggles" class="control-toggles">
+        <button id="metronomeToggle" class="control-btn" title="Metronom">🔔</button>
+        <button id="scrollToggle" class="control-btn" title="Autoscroll">⇆</button>
+        <button id="textToggle" class="control-btn" title="Text">𝓣</button>
+      </div>
     </div>
     <!-- Aktuellt ackord och cue -->
     <div id="currentChord" class="current-chord"></div>
