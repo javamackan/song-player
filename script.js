@@ -35,7 +35,7 @@ let timeOffset = 0;
 let animationFrameId = null;
 
 // Konstanter för nudge-storlek (ms)
-const NUDGE_STEP_MS = 20;
+const NUDGE_STEP_MS = 80;
 
 /**
  * Justerar tiden framåt genom att minska timeOffset. Detta gör att
