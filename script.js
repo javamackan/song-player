@@ -171,7 +171,7 @@ const pastelPalette = [
   '#cce8ff', // ljus himmel
   '#ffe8bb', // smörgul
   '#c0f5e8', // mintgrön
-  '#ffdecc', // persika
+  // '#ffdecc', // persika – borttagen för att undvika krock med highlightfärgen
   '#e8e8c0'  // ljus oliv
 ];
 // Tilldelade färger per sektion (fylls i loadChart)
