@@ -165,14 +165,14 @@ function computeScheduleTimes(bpm) {
 }
 
 // Pastellfärger för sektioner. Cykla igenom vid behov
+// Pastellpalett för sektioner. Undvik nyanser nära aprikos (som används för beat-highlight)
 const pastelPalette = [
-  // mer mättade pasteller för tydligare makrosektioner
   '#e6c1ff', // ljus lavendel
   '#cce8ff', // ljus himmel
-  '#ffe8bb', // smörgul
   '#c0f5e8', // mintgrön
-  // '#ffdecc', // persika – borttagen för att undvika krock med highlightfärgen
-  '#e8e8c0'  // ljus oliv
+  '#e8e8c0', // ljus oliv
+  '#ffd9e8', // ljusrosa
+  '#c8d1ff'  // mjuk periwinkle
 ];
 // Tilldelade färger per sektion (fylls i loadChart)
 let sectionColors = [];
@@ -184,6 +184,12 @@ let sectionBorderColors = [];
 // Metronomen är avstängd som default; autoscroll är påslagen som default enligt v23
 let metronomeEnabled = false;
 let autoScrollEnabled = true;
+
+// Markerad (armerad) sektion i makroflödet. Om denna är satt och
+// användaren trycker på mellanslag startar playback direkt från
+// sektionens början utan count-in. Null betyder att ingen sektion
+// är armerad.
+let armedSectionIndex = null;
 
 // Synlighet för sektionstexter och flagga om det finns sådana
 // hasSectionText blir true om minst en sektion har text definierad i CSV
@@ -612,6 +618,8 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   }
   barDiv.addEventListener('click', () => {
     const index = barOffsets[sectionIndex][barIndex];
+    // Klick på en takt ska rensa armerad sektion och starta direkt
+    armedSectionIndex = null;
     startPlaybackFrom(index);
   });
   return barDiv;
@@ -707,6 +715,11 @@ function navigateToSection(sectionIndex) {
   buildMicroRows(currentSectionIndex);
   highlightMacro(currentSectionIndex);
   highlightMicro(playIndex);
+
+  // Markera denna sektion som armerad. Nästa gång användaren
+  // trycker på mellanslag startar playback direkt från denna
+  // sektion utan count-in.
+  armedSectionIndex = sectionIndex;
 
   // När autoscroll är aktiverat och användaren navigerar manuellt,
   // scrolla både microCurrent och macroFlow till början av den nya sektionen
@@ -935,6 +948,11 @@ function startPlaybackFrom(index) {
   highlightMicro(playIndex);
   // starta scheduler-loop
   startScheduler();
+
+  // När playback startas explicit från en punkt (t.ex. armerad
+  // sektion eller klickad takt), resetta armerad sektion så att
+  // mellanslag inte startar om på denna sektion.
+  armedSectionIndex = null;
 }
 
 /**
@@ -1111,6 +1129,9 @@ function loadChart() {
   buildMicroRows(currentSectionIndex);
   highlightMacro(currentSectionIndex);
   highlightMicro(playIndex);
+
+  // Återställ eventuellt armerad sektion när en ny låt laddas
+  armedSectionIndex = null;
   stopPlayback();
 
   // visa eller dölj textknapp beroende på om sektionstext finns
@@ -1396,8 +1417,16 @@ document.addEventListener('DOMContentLoaded', () => {
       case ' ': // mellanslag
       case 'Spacebar':
       case 'Space':
-        // starta aktuell låt (från början)
-        startPlayback();
+        // Om en sektion är armerad (vald i makroflödet) starta
+        // playback direkt från sektionens början utan count-in. I
+        // annat fall starta från början med count-in.
+        if (armedSectionIndex !== null && sectionOffsets && sectionOffsets.length > 0) {
+          const startIdx = sectionOffsets[armedSectionIndex] || 0;
+          armedSectionIndex = null;
+          startPlaybackFrom(startIdx);
+        } else {
+          startPlayback();
+        }
         e.preventDefault();
         break;
       default:
