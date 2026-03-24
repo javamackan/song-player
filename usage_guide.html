@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChordFlow – Appguide</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+      background: #f7f9fc;
+      color: #2a2a2a;
+      margin: 0;
+      padding: 1rem;
+    }
+    h1, h2 {
+      color: #2c3e50;
+    }
+    p {
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+    ul {
+      margin-bottom: 1rem;
+    }
+    code {
+      background: #eef5fa;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    .button-hint {
+      font-size: 0.9rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>ChordFlow – användarguide</h1>
+  <p>Den här guiden beskriver hur du använder ChordFlow‑applikationen för att visa ackord och text i realtid. Appen är designad för livebruk med enkel navigation via tangentbord, fotpedal eller knappar.</p>
+
+  <h2>Layout och kontroller</h2>
+  <p>Gränssnittet består av följande delar:</p>
+  <ul>
+    <li><strong>Låtval &nbsp;</strong> – välj en låt från listan och klicka på <em>Ladda valda låt</em> för att hämta dess CSV‑data.</li>
+    <li><strong>Editor‑panel</strong> – här kan du klistra in eller redigera CSV‑data direkt, samt justera tempo och ladda diagrammet. Panelen kan fällas ihop med knappen <em>Fäll ihop</em> för att ge mer utrymme åt ackordvisningen.</li>
+    <li><strong>Spelarpanel</strong> – visar knappar för föregående låt (⏮), stopp (⏹), start (▶) och nästa låt (⏭). Under ikonerna visas namnet på nästa/föregående låt. Du kan fälla ihop spelarknapparna med pilknappen (▲/▼).</li>
+    <li><strong>Kontrollknappar</strong> – tre knappar som styr metronomljudet (🔔), autoscroll (⇆) och visning av sektionstext (𝓣). Aktiva knappar är färgade, avstängda knappar är grå.</li>
+    <li><strong>Macroflöde</strong> – den översta flödesraden visar sektionerna i låten. Klicka på en sektion för att hoppa dit. Den aktuella sektionen markeras med fetstil, större text och en röd ram. Sektionernas bakgrundsfärg visar låtens struktur.</li>
+    <li><strong>Mikroflöde</strong> – två rader under makroflödet visar alla takter i den aktuella sektionen och i nästa sektion. Klicka på en takt för att starta uppspelningen från den takten. Nästa sektion får samma bakgrundsfärg som i makroflödet.</li>
+    <li><strong>Aktuell takt och cue</strong> – det stora ackordet mitt på sidan visar vilket ackord som spelas just nu. Under det visas en eventuell cue‑text (t.ex. "trumrullning").</li>
+    <li><strong>Sektionstext</strong> – text under mikroraderna visar alla rader som sjungs i den aktuella sektionen. Nästa sektionens första textrad visas i kursiv stil.</li>
+  </ul>
+
+  <h2>Tangentbordsmappningar</h2>
+  <p>Appen kan styras via tangentbord eller HID‑fotpedal. Nedan är standardmappningen:</p>
+  <ul>
+    <li><code>Space</code> – Starta låten (med count‑in) från början.</li>
+    <li><code>Arrow&nbsp;Right</code> – Nudge framåt (80&nbsp;ms) för att komma ikapp musiken.</li>
+    <li><code>Arrow&nbsp;Left</code> – Nudge bakåt (80&nbsp;ms) för att vänta in musiken.</li>
+    <li><code>Page&nbsp;Down</code> – Ladda nästa låt i setlisten utan att starta den.</li>
+    <li><code>Page&nbsp;Up</code> – Ladda föregående låt i setlisten utan att starta den.</li>
+  </ul>
+  <p>Dessa tangenttryckningar fungerar endast när fokus inte är i ett text‑ eller nummerfält.</p>
+
+  <h2>Djup‑länkar</h2>
+  <p>Du kan länka direkt till en specifik låt genom att lägga till en query‑parameter i URL:en. Exempel:</p>
+  <ul>
+    <li><code>?song=My&nbsp;Song</code> – laddar låten vars namn är “My&nbsp;Song”</li>
+    <li><code>?file=02_minsuperlåt.csv</code> – laddar CSV‑filen med angivet filnamn</li>
+  </ul>
+  <p>När en djup‑länk används göms låtval och editor-panelen automatiskt så att musikerna ser en ren spelvy direkt.</p>
+
+  <h2>CSV‑syntax</h2>
+  <p>Se <a href="syntax_guide.html" target="_blank">syntaxguiden</a> för detaljerat format för ackord, text och metadata. Kortfattat:</p>
+  <ul>
+    <li>Första raden: <code>Titel, Tempo, Signature</code>. Signaturen är valfri och anger tidsignatur (t.ex. 8/4 eller 12/8). 4/4 antas om inget anges.</li>
+    <li>Fältmarkerade sektioner: varje rad efter headern representerar en sektion. Kolumn 1 = sektionsnamn, kolumn 2+ = takter.</li>
+    <li>Ackord inom en takt separeras med mellanslag. Punkt (<code>.</code>) behåller föregående ackord, underscore (<code>_</code>) anger tystnad.</li>
+    <li>För cue‑text, lägg den sist i taktens cell inom hakparanteser (<code>[cue]</code>).</li>
+    <li>För sektionstext, skriv i sista cellen inneslutet i klammerparenteser (<code>{rad1 = rad2}</code>).</li>
+  </ul>
+
+  <h2>Tips</h2>
+  <p class="button-hint">För bästa upplevelse på iPad eller mobil: fäll ihop editor‑ och låtvalspanelen när låten är laddad. Starta musiken med Space eller via startknappen, och använd nudge‑knapparna för finjustering. “Autoscroll” håller automatiskt aktuell takt i fokus, men du kan stänga av funktionen för att scrolla manuellt.</p>
+
+</body>
+</html>

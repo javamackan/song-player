@@ -16,12 +16,32 @@ header {
   padding: 0.6rem 1rem;
   text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  position: relative; /* för att positionera guide-länken */
 }
 
 header .song-title {
   margin: 0;
   font-size: 1.6rem;
   font-weight: 500;
+}
+
+/* Frågetecken-länk för app-guide placerad uppe till höger i header */
+header .guide-link {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.4rem;
+  color: #fff;
+  text-decoration: none;
+  background: transparent;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+header .guide-link:hover {
+  background: rgba(255,255,255,0.2);
 }
 
 main {
@@ -86,6 +106,40 @@ main {
   padding: 0.35rem 0.8rem;
 }
 
+/* Kollapsad spelarpanel döljer spelarknappar */
+.player-controls.collapsed {
+  display: none;
+}
+
+/* Kollapsad rad för kontrollknappar (metronom, scroll, text) */
+.control-toggles.collapsed {
+  display: none;
+}
+
+/* Rad för knappar som fäller editor och kontroller. Placerad mellan editor och spelar-raderna */
+.collapse-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+/* Knappar för att fälla editor respektive kontroller */
+.collapse-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: #2c3e50;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+.collapse-btn:hover {
+  background: #24374a;
+}
+
 /* Placera ikon över och hint under inne i spelarknappen */
 .player-btn {
   display: flex;
@@ -99,6 +153,15 @@ main {
   line-height: 1;
   margin-top: 0.1rem;
   color: #f0f0f0; /* ljus textfärg för bättre kontrast på mörk bakgrund */
+}
+
+/* Separat kollapsknapp för spelarpanelen (placerad utanför raden) */
+.player-toggle {
+  align-self: flex-start;
+  margin-top: -0.2rem;
+  margin-left: 0.2rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 /* Gör toggelknapparnas ikoner något större */
@@ -297,6 +360,10 @@ main {
 .macro-section.current {
   background: #2a5873;
   color: white;
+  /* markera aktiv sektion med fetare text och röd kant */
+  font-weight: bold;
+  border: 2px solid #e74c3c;
+  font-size: 1.0rem;
 }
 .macro-section:hover {
   background: #dde8f2;

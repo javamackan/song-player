@@ -8,8 +8,10 @@
 </head>
 <body>
   <header>
-    <!-- Header visar endast låtens titel. Innan CSV laddas visas en placeholder -->
+    <!-- Header visar låtens titel och en länk till app-guiden. Innan CSV laddas visas en placeholder -->
     <h2 id="songTitle" class="song-title">Titel</h2>
+    <!-- Frågetecken-ikon för att öppna app-guiden i ny flik -->
+    <a href="usage_guide.html" target="_blank" id="appGuideLink" title="Visa appens guide" class="guide-link">?</a>
   </header>
   <main>
     <!-- wrapper för kontrollpanel och toggle-knapp -->
@@ -34,8 +36,11 @@
           <a href="syntax_guide.html" target="_blank" class="editor-btn" id="guideLink">Syntax&nbsp;guide</a>
         </div>
       </div>
-      <!-- Knapp för att fälla ihop eller expandera redigerings- och låt-panelen -->
-      <button id="toggleEditor" class="toggle-editor">Fäll ihop ▲</button>
+      <!-- Knappar för att fälla editor och kontroller. Dessa visas horisontellt mellan editor och spelarknappar -->
+      <div class="collapse-controls">
+        <button id="toggleEditor" class="collapse-btn">Dölj editor</button>
+        <button id="togglePlayer" class="collapse-btn" title="Dölj kontroller">Dölj kontroller</button>
+      </div>
       <!-- Spelarkontroller: föregående, stopp, start, nästa -->
       <div id="playerControls" class="player-controls">
         <button id="prevSong" class="player-btn" title="Föregående låt">⏮</button>

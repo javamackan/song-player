@@ -37,6 +37,9 @@ let animationFrameId = null;
 // Konstanter för nudge-storlek (ms). Justeras till 80 ms enligt v23 krav
 const NUDGE_STEP_MS = 80;
 
+// Tillstånd för spelarpanelen (kollapsad eller ej)
+let playerPanelCollapsed = false;
+
 /**
  * Justerar tiden framåt genom att minska timeOffset. Detta gör att
  * nästkommande beat triggas tidigare.
@@ -196,7 +199,7 @@ let songsList = [];
  * parametern song eller file finns. Parametern kan vara namn (name)
  * eller filnamn. Körs efter att songsList har laddats.
  */
-function handleDeepLink() {
+async function handleDeepLink() {
   const params = new URLSearchParams(window.location.search);
   const target = params.get('song') || params.get('file');
   if (!target || !songsList || !songsList.length) return;
@@ -212,7 +215,19 @@ function handleDeepLink() {
     if (selectEl) {
       selectEl.value = found.file;
       // ladda låt men starta inte
-      loadSelectedSong();
+      await loadSelectedSong();
+      // kollapsa editor- och låtvals-panelen vid djuplänk för att få fokus på spelare
+      const panel = document.getElementById('editorPanel');
+      const songRow = document.getElementById('songControls');
+      if (panel && !panel.classList.contains('collapsed')) {
+        panel.classList.add('collapsed');
+      }
+      if (songRow && !songRow.classList.contains('collapsed')) {
+        songRow.classList.add('collapsed');
+      }
+      // ändra text på fällknapp
+      const btnToggle = document.getElementById('toggleEditor');
+      if (btnToggle) btnToggle.textContent = 'Visa editor';
     }
   }
 }
@@ -624,6 +639,12 @@ function buildMicroRows(sectionIndex) {
       const barEl = createBarElement(nextSecIndex, bi, barObj);
       nextRow.appendChild(barEl);
     });
+    // Färgsätt alla barer i nästa sektion med samma färg som dess makrosektions bakgrund
+    const nextColor = sectionColors[nextSecIndex] || pastelPalette[nextSecIndex % pastelPalette.length];
+    nextRow.querySelectorAll('.bar').forEach(barEl => {
+      // sätt en mjuk bakgrundsfärg för nästa sektion
+      barEl.style.backgroundColor = nextColor;
+    });
   }
   // uppdatera sektionstext
   buildSectionText(sectionIndex);
@@ -686,6 +707,20 @@ function navigateToSection(sectionIndex) {
   buildMicroRows(currentSectionIndex);
   highlightMacro(currentSectionIndex);
   highlightMicro(playIndex);
+
+  // När autoscroll är aktiverat och användaren navigerar manuellt,
+  // scrolla både microCurrent och macroFlow till början av den nya sektionen
+  if (autoScrollEnabled) {
+    const microRow = document.getElementById('microCurrent');
+    if (microRow) {
+      microRow.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+    const macroContainer = document.getElementById('macroFlow');
+    const currentMacro = macroContainer.querySelector('.macro-section.current');
+    if (currentMacro) {
+      currentMacro.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+    }
+  }
 }
 
 /**
@@ -941,7 +976,7 @@ async function loadSongList() {
     // uppdatera hint på navigeringsknappar
     updateSongButtons();
     // hantera eventuell djuplänk
-    handleDeepLink();
+    await handleDeepLink();
   } catch (e) {
     // misslyckades att hämta listan; visa ändå dropdown men inaktivera knapp
     console.error('Kunde inte läsa songs.json', e);
@@ -1123,9 +1158,36 @@ function toggleEditorPanel() {
   }
   const btn = document.getElementById('toggleEditor');
   if (panel.classList.contains('collapsed')) {
-    btn.textContent = 'Visa editor ▼';
+    // panel är nu dold – visa knapp för att öppna editorn
+    btn.textContent = 'Visa editor';
   } else {
-    btn.textContent = 'Fäll ihop ▲';
+    // panel synlig – visa knapp för att dölja editorn
+    btn.textContent = 'Dölj editor';
+  }
+}
+
+/**
+ * Togglar visningen av spelarpanelen (föregående/stopp/start/nästa). När panelen är
+ * kollapsad döljs knappraden så att ackorden får mer utrymme.
+ */
+function togglePlayerPanel() {
+  const playerRow = document.getElementById('playerControls');
+  const togglesRow = document.getElementById('controlToggles');
+  const toggleBtn = document.getElementById('togglePlayer');
+  if (!playerRow || !toggleBtn) return;
+  playerPanelCollapsed = !playerPanelCollapsed;
+  if (playerPanelCollapsed) {
+    // dölj både spelarknappar och kontrollknappar
+    playerRow.classList.add('collapsed');
+    if (togglesRow) togglesRow.classList.add('collapsed');
+    toggleBtn.textContent = 'Visa kontroller';
+    toggleBtn.title = 'Visa kontroller';
+  } else {
+    // visa både spelarknappar och kontrollknappar
+    playerRow.classList.remove('collapsed');
+    if (togglesRow) togglesRow.classList.remove('collapsed');
+    toggleBtn.textContent = 'Dölj kontroller';
+    toggleBtn.title = 'Dölj kontroller';
   }
 }
 
@@ -1226,6 +1288,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('stop').addEventListener('click', () => {
     stopPlayback();
   });
+  // toggla spelarpanelen
+  document.getElementById('togglePlayer').addEventListener('click', togglePlayerPanel);
   // toggla redigeringspanelen (csv/tempo)
   document.getElementById('toggleEditor').addEventListener('click', toggleEditorPanel);
 
