@@ -15,10 +15,12 @@
     "name": "04 Judgement Day",
     "file": "Judgement.csv"
   },
-{
-    "name": "05 90-60-90",
-    "file": "90.csv"
-  },
+
+	
+	{
+    "name": "05 Half man half consumer",
+    "file": "Halfman.csv"
+  	},
 	
 {
     "name": "06 Eye of the Storm",
@@ -49,20 +51,19 @@
     "name": "11 Circle of Trust",
     "file": "Circle.csv"
   },
-	{
-    "name": "12 Half man half consumer",
-    "file": "Halfman.csv"
-  	},
 
 
 	{
-    "name": "99 RocknRoll All Nite",
+    "name": "12 RocknRoll All Nite",
     "file": "RockNRollNite.csv"
   	},
 
 	{
     "name": "Beat of my heart",
     "file": "BeatHeart.csv"
-  	}
-
+  	},
+{
+    "name": "05 90-60-90",
+    "file": "90.csv"
+  }
 ]
