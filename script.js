@@ -1,5 +1,5 @@
 /*
- * ChordFlow v10
+ * ChordFlow v33
  *
  * Den här versionen bygger vidare på v9 och lägger till ett
  * metronompip (audio) för varje beat samt möjligheten att fälla ihop
@@ -200,6 +200,11 @@ let textVisible = true;
 // Lista över låtar som kan väljas via dropdown
 let songsList = [];
 
+// Metadata för senast laddade låt. Används bland annat för utskriftsvyn.
+let currentSongTitle = '';
+let currentSongTempo = 120;
+let currentSongSignature = '4/4';
+
 /**
  * Kontrollerar URL-parametrar och laddar en låt automatiskt om
  * parametern song eller file finns. Parametern kan vara namn (name)
@@ -353,6 +358,70 @@ function parseCsv(text) {
   );
 }
 
+
+/**
+ * Enkel HTML-escaping för texter som renderas i print-layouten.
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Delar upp sektionstext i flera rader med '=' som radbrytare.
+ * @param {string} raw
+ * @returns {string[]|null}
+ */
+function parseTextLines(raw) {
+  if (!raw) return null;
+  const inner = String(raw).trim();
+  if (!inner) return null;
+  const lines = inner.split('=').map(s => s.trim()).filter(Boolean);
+  return lines.length ? lines : null;
+}
+
+/**
+ * Normaliserar ett sektionsnamn till en färgnyckel. Siffror längst bak
+ * ignoreras, så att exempelvis Verse 1, Verse 2 och Verse 3 får samma färg.
+ * @param {string} sectionName
+ * @returns {string}
+ */
+function getSectionColorKey(sectionName) {
+  const normalized = String(sectionName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  const stripped = normalized.replace(/(?:\s*[-_:]?\s*\d+)\s*$/, '').trim();
+  return stripped || normalized || 'section';
+}
+
+/**
+ * Tilldelar färger till sektioner. Återkommande sektionstyper med samma
+ * namn, bortsett från avslutande siffra, återanvänder exakt samma nyans.
+ */
+function assignSectionColors() {
+  const colorByKey = new Map();
+  let paletteIndex = 0;
+
+  sectionColors = sections.map((sec, idx) => {
+    const fallbackColor = pastelPalette[idx % pastelPalette.length];
+    const key = getSectionColorKey(sec && sec.name ? sec.name : '');
+    if (!colorByKey.has(key)) {
+      colorByKey.set(key, pastelPalette[paletteIndex % pastelPalette.length] || fallbackColor);
+      paletteIndex++;
+    }
+    return colorByKey.get(key) || fallbackColor;
+  });
+
+  sectionBorderColors = sectionColors.map(col => getDarkerColor(col, 0.7));
+}
+
 /**
  * Parsar sektioner från CSV-arrayen från angivet startindex.
  */
@@ -364,37 +433,50 @@ function parseSections(csv, startRow) {
     const row = csv[r];
     if (!row) continue;
     const name = (row[0] || '').trim() || `Section ${r}`;
+
     // trim trailing empty cells
     let lastIndex = row.length - 1;
     while (lastIndex > 0 && !(row[lastIndex] && row[lastIndex].trim())) {
       lastIndex--;
     }
+
     let textLines = null;
-    // check if last cell contains section text in curly braces
-    const lastCell = row[lastIndex] ? row[lastIndex].trim() : '';
     let barsEndIndex = lastIndex;
+
+    // Primärt format: sista cellen innehåller sektionstext inom {}
+    const lastCell = row[lastIndex] ? row[lastIndex].trim() : '';
     if (lastCell.startsWith('{') && lastCell.endsWith('}')) {
-      // extract text and split by '='
-      const inner = lastCell.slice(1, -1).trim();
-      if (inner) {
-        textLines = inner.split('=').map(s => s.trim());
-        hasSectionText = true;
-      }
+      textLines = parseTextLines(lastCell.slice(1, -1));
+      if (textLines) hasSectionText = true;
       barsEndIndex = lastIndex - 1;
     }
+
     const bars = [];
     for (let c = 1; c <= barsEndIndex; c++) {
-      const cell = (row[c] || '').trim();
+      let cell = (row[c] || '').trim();
       if (!cell) break;
+
+      // Tolerant fallback: tillåt också {sektionstext} i samma cell som sista takten.
+      const inlineTextMatch = cell.match(/\{([^}]*)\}/);
+      if (inlineTextMatch) {
+        if (!textLines) {
+          textLines = parseTextLines(inlineTextMatch[1]);
+          if (textLines) hasSectionText = true;
+        }
+        cell = cell.replace(inlineTextMatch[0], '').trim();
+      }
+
       // Bar-def: kan innehålla optional signature-prefix, cue-text i hakparanteser och själva ackorddefinitionen.
       let chordDef = cell;
       let cue = null;
+
       // extrahera cue i hakparanteser, t.ex. [trumrullning]
       const cueMatch = chordDef.match(/\[(.*?)\]/);
       if (cueMatch) {
         cue = cueMatch[1].trim();
         chordDef = chordDef.replace(cueMatch[0], '').trim();
       }
+
       // extrahera optional signature-override i början, t.ex. "8/4 " eller "12/8 "
       let subdivisionOverride = null;
       const sigMatch = chordDef.match(/^(\d+\/\d+)\s+/);
@@ -402,10 +484,14 @@ function parseSections(csv, startRow) {
         subdivisionOverride = sigMatch[1];
         chordDef = chordDef.slice(sigMatch[0].length).trim();
       }
+
       // beräkna subdivision (antal sub-steg) baserat på override eller global defaultSignature
       const subdivision = parseSignatureToSubdivision(subdivisionOverride || defaultSignature);
-      bars.push({ chordDef: chordDef, cue, subdivision });
+      if (chordDef) {
+        bars.push({ chordDef, cue, subdivision });
+      }
     }
+
     if (bars.length) {
       result.push({ name, bars, textLines });
     }
@@ -496,6 +582,47 @@ function getBeats(barObj) {
   return beats;
 }
 
+
+/**
+ * Skapar komprimerade segment för en takt, så att lika långa ackord kan renderas
+ * som en sammanhängande blocksekvens både i live-vy och print-vy.
+ * @param {object|string} barObj
+ * @returns {{chord: string, length: number}[]}
+ */
+function getSegments(barObj) {
+  const beats = getBeats(barObj);
+  if (!beats.length) return [];
+  const segments = [];
+  let current = beats[0];
+  let len = 1;
+  for (let i = 1; i < beats.length; i++) {
+    if (beats[i] === current) {
+      len++;
+    } else {
+      segments.push({ chord: current, length: len });
+      current = beats[i];
+      len = 1;
+    }
+  }
+  segments.push({ chord: current, length: len });
+  return segments;
+}
+
+/**
+ * Returnerar etikett för en takt, lämpad för enkel textvisning i print-läget.
+ * Om takten innehåller ett enda ackord returneras bara det. Annars komprimeras
+ * förändringarna inom takten till t.ex. "D | G | A".
+ * @param {object|string} barObj
+ * @returns {string}
+ */
+function getBarLabel(barObj) {
+  const segments = getSegments(barObj);
+  if (!segments.length) return '';
+  return segments
+    .map(seg => (seg.chord === '_' || !seg.chord) ? '—' : seg.chord)
+    .join(' | ');
+}
+
 /**
  * Bygger timeline, sectionOffsets och barOffsets med variabla beats.
  */
@@ -555,11 +682,14 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   barDiv.className = 'bar';
   barDiv.dataset.sectionIndex = sectionIndex;
   barDiv.dataset.barIndex = barIndex;
+  const sectionColor = sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length];
   // sätt kantfärg baserat på mörkare variant av sektionens pastellfärg
-  const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length], 0.7);
+  const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColor, 0.7);
   barDiv.style.borderColor = borderColor;
-  // visa svagt bakgrundsfärg när aktiv: hanteras via CSS .bar.active men vi kan sätta border-färg ovan
+  barDiv.style.backgroundColor = sectionColor;
+  barDiv.style.setProperty('--section-border-color', borderColor);
   const beats = getBeats(barObj);
+  const segments = getSegments(barObj);
   const uniqueChords = [...new Set(beats.filter(ch => ch !== ''))];
   if (uniqueChords.length === 1) {
     const chordLabel = uniqueChords[0] === '_' ? '—' : uniqueChords[0];
@@ -568,20 +698,6 @@ function createBarElement(sectionIndex, barIndex, barObj) {
     sc.textContent = chordLabel;
     barDiv.appendChild(sc);
   } else {
-    // komprimera sekvenser
-    const segments = [];
-    let current = beats[0];
-    let len = 1;
-    for (let i = 1; i < beats.length; i++) {
-      if (beats[i] === current) {
-        len++;
-      } else {
-        segments.push({ chord: current, length: len });
-        current = beats[i];
-        len = 1;
-      }
-    }
-    segments.push({ chord: current, length: len });
     const segContainer = document.createElement('div');
     segContainer.className = 'segment-container';
     segments.forEach((seg, segIndex) => {
@@ -647,12 +763,6 @@ function buildMicroRows(sectionIndex) {
       const barEl = createBarElement(nextSecIndex, bi, barObj);
       nextRow.appendChild(barEl);
     });
-    // Färgsätt alla barer i nästa sektion med samma färg som dess makrosektions bakgrund
-    const nextColor = sectionColors[nextSecIndex] || pastelPalette[nextSecIndex % pastelPalette.length];
-    nextRow.querySelectorAll('.bar').forEach(barEl => {
-      // sätt en mjuk bakgrundsfärg för nästa sektion
-      barEl.style.backgroundColor = nextColor;
-    });
   }
   // uppdatera sektionstext
   buildSectionText(sectionIndex);
@@ -703,6 +813,113 @@ function buildSectionText(sectionIndex) {
     html += '<span class="next-preview">' + preview + '</span>';
   }
   container.innerHTML = html;
+}
+
+
+/**
+ * Skapar ett taktblock för utskriftsvyn.
+ * @param {number} sectionIndex
+ * @param {number} barIndex
+ * @param {object|string} barObj
+ * @returns {HTMLDivElement}
+ */
+function createPrintBarElement(sectionIndex, barIndex, barObj) {
+  const barDiv = document.createElement('div');
+  barDiv.className = 'print-bar';
+  const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length], 0.7);
+  barDiv.style.borderColor = borderColor;
+  barDiv.style.backgroundColor = sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length];
+
+  const label = document.createElement('div');
+  label.className = 'print-bar-label';
+  label.textContent = getBarLabel(barObj) || '—';
+  barDiv.appendChild(label);
+
+  if (barObj && barObj.cue) {
+    const cueDiv = document.createElement('div');
+    cueDiv.className = 'print-bar-cue';
+    cueDiv.textContent = `[${barObj.cue}]`;
+    barDiv.appendChild(cueDiv);
+  }
+
+  return barDiv;
+}
+
+/**
+ * Bygger en separat, ren layout som bara används vid utskrift/PDF.
+ * Sektionerna staplas vertikalt medan takterna flödar åt höger och radbryts vid behov.
+ */
+function buildPrintLayout() {
+  const printView = document.getElementById('printView');
+  if (!printView) return;
+
+  if (!sections.length) {
+    printView.innerHTML = '';
+    return;
+  }
+
+  const title = currentSongTitle || document.getElementById('songTitle').textContent || 'Titel';
+  const tempo = parseInt(document.getElementById('tempo').value, 10) || currentSongTempo || 120;
+  const signature = currentSongSignature || defaultSignature || '4/4';
+
+  printView.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'print-header';
+
+  const titleEl = document.createElement('h1');
+  titleEl.className = 'print-title';
+  titleEl.textContent = title;
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'print-meta';
+  metaEl.textContent = `Tempo: ${tempo} BPM • Signatur: ${signature}`;
+
+  header.appendChild(titleEl);
+  header.appendChild(metaEl);
+  printView.appendChild(header);
+
+  sections.forEach((sec, sectionIndex) => {
+    const sectionEl = document.createElement('section');
+    sectionEl.className = 'print-section';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'print-section-name';
+    labelEl.textContent = sec.name;
+    labelEl.style.backgroundColor = sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length];
+    labelEl.style.borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length], 0.7);
+
+    const barsEl = document.createElement('div');
+    barsEl.className = 'print-section-bars';
+
+    sec.bars.forEach((barObj, barIndex) => {
+      barsEl.appendChild(createPrintBarElement(sectionIndex, barIndex, barObj));
+    });
+
+    sectionEl.appendChild(labelEl);
+    sectionEl.appendChild(barsEl);
+
+    if (textVisible && sec.textLines && sec.textLines.length) {
+      const textEl = document.createElement('div');
+      textEl.className = 'print-section-text';
+      textEl.innerHTML = sec.textLines.map(line => escapeHtml(line)).join('<br>');
+      sectionEl.appendChild(textEl);
+    }
+
+    printView.appendChild(sectionEl);
+  });
+}
+
+/**
+ * Öppnar webbläsarens utskriftsdialog. I praktiken kan användaren spara som PDF.
+ */
+function printSongPdf() {
+  if (!sections.length) {
+    alert('Ladda en låt innan du skriver ut.');
+    return;
+  }
+  buildPrintLayout();
+  window.print();
 }
 
 /**
@@ -783,20 +1000,7 @@ function highlightMicro(index) {
       // segment
       const segContainer = barEl.querySelector('.segment-container');
       if (segContainer) {
-        const beats = getBeats(sections[curr.section].bars[curr.bar]);
-        const segs = [];
-        let c = beats[0];
-        let len = 1;
-        for (let i = 1; i < beats.length; i++) {
-          if (beats[i] === c) {
-            len++;
-          } else {
-            segs.push({ chord: c, length: len });
-            c = beats[i];
-            len = 1;
-          }
-        }
-        segs.push({ chord: c, length: len });
+        const segs = getSegments(sections[curr.section].bars[curr.bar]);
         let acc = 0;
         let activeSeg = 0;
         for (let i = 0; i < segs.length; i++) {
@@ -966,12 +1170,7 @@ async function loadSongList() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const list = await res.json();
     songsList = Array.isArray(list) ? list : [];
-    // sortera per namn för setlist-ordning
-    songsList.sort((a, b) => {
-      const an = a.name || a.file || '';
-      const bn = b.name || b.file || '';
-      return an.localeCompare(bn);
-    });
+    // behåll ordningen i songs.json – den utgör setlisten.
     // töm befintliga alternativ utom första
     while (selectEl.options.length > 1) {
       selectEl.remove(1);
@@ -1105,22 +1304,23 @@ function loadChart() {
     }
   }
   // sätt titel eller placeholder "Titel" om ingen hittades
-  document.getElementById('songTitle').textContent = title || 'Titel';
+  currentSongTitle = title || 'Titel';
+  document.getElementById('songTitle').textContent = currentSongTitle;
   if (tempoFromCsv) {
     document.getElementById('tempo').value = tempoFromCsv;
   }
+  currentSongTempo = parseInt(document.getElementById('tempo').value, 10) || tempoFromCsv || 120;
   // sätt defaultSignature baserat på metadata från CSV eller behåll tidigare. Om signatureFromCsv finns använd den.
   defaultSignature = signatureFromCsv || '4/4';
+  currentSongSignature = defaultSignature;
   sections = parseSections(csv, 0);
   if (!sections.length) {
     alert('Inga sektioner hittades. Kontrollera CSV-formatet.');
     return;
   }
 
-  // tilldela pastellfärger till sektioner
-  sectionColors = sections.map((_, idx) => pastelPalette[idx % pastelPalette.length]);
-  // beräkna mörkare kantfärger för varje sektion
-  sectionBorderColors = sectionColors.map(col => getDarkerColor(col, 0.7));
+  // tilldela konsekventa sektionsfärger så att t.ex. Verse 1/2/3 återanvänder samma nyans
+  assignSectionColors();
 
   buildTimeline();
   buildMacroFlow();
@@ -1133,6 +1333,7 @@ function loadChart() {
   // Återställ eventuellt armerad sektion när en ny låt laddas
   armedSectionIndex = null;
   stopPlayback();
+  buildPrintLayout();
 
   // visa eller dölj textknapp beroende på om sektionstext finns
   const textBtn = document.getElementById('textToggle');
@@ -1318,6 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('metronomeToggle').addEventListener('click', toggleMetronome);
   document.getElementById('scrollToggle').addEventListener('click', toggleAutoScroll);
   document.getElementById('textToggle').addEventListener('click', toggleText);
+  document.getElementById('printSong').addEventListener('click', printSongPdf);
 
   // init-knappar med default states för metronom, autoscroll och text
   // Metronom av som default
@@ -1369,6 +1571,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (selectEl) {
     selectEl.addEventListener('change', () => {
       updateSongButtons();
+    });
+  }
+
+  const tempoInput = document.getElementById('tempo');
+  if (tempoInput) {
+    tempoInput.addEventListener('input', () => {
+      currentSongTempo = parseInt(tempoInput.value, 10) || currentSongTempo || 120;
+      if (sections.length) buildPrintLayout();
     });
   }
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChordFlow – Syntaxguide</title>
+  <title>ChordFlow – Syntaxguide (v33) v33</title>
   <style>
     body {
       font-family: "Inter", "Segoe UI", Roboto, sans-serif;
@@ -75,9 +75,10 @@
   <pre>A&nbsp;.&nbsp;D&nbsp;. [trumrullning]</pre>
 
   <h2>5. Sektionstext (lyrics)</h2>
-  <p>Om du vill visa text (t.ex. lyrics) för en sektion lägger du den i den sista cellen i sektionen, omgiven av klamrar <code>{}</code>. Använd <code>=</code> för att separera rader. Exempel:</p>
+  <p>Om du vill visa text (t.ex. lyrics) för en sektion lägger du den normalt i den sista cellen i sektionen, omgiven av klamrar <code>{}</code>. Använd <code>=</code> för att separera rader. Exempel:</p>
   <pre>Chorus,G&nbsp;C&nbsp;G&nbsp;D,{Oh&nbsp;yes&nbsp;this&nbsp;time=I&nbsp;promise&nbsp;myself}</pre>
-  <p>Texten visas som ett block under mikroflödet när sektionen är aktiv. Den nästkommande sektionens första rad visas i kursiv stil som förhandsvisning. Om en sektion saknar text visas inget textblock.</p>
+  <p>Appen tolererar också en äldre variant där <code>{...}</code> ligger i samma cell som sista takten, men rekommendationen i nya filer är att lägga sektionstexten i en separat sista cell för tydlighet.</p>
+  <p>Texten visas som ett block under mikroflödet när sektionen är aktiv. Den nästkommande sektionens första textrad visas i kursiv stil som förhandsvisning. Om en sektion saknar text visas inget textblock.</p>
 
   <h2>6. Tidsignatur (signature)</h2>
   <p>Standardtidsignaturen bestäms av tredje värdet i metadata-raden. Du kan åsidosätta den för en enskild takt genom att skriva tidsignaturen först i cellen, följt av ett mellanslag och ackorden. Exempel:</p>
@@ -86,7 +87,7 @@
   <h2>7. Filhantering och setlist</h2>
   <ul>
     <li>Alla låtar lagras som CSV-filer. Lista dem i filen <code>songs.json</code> med objekt som innehåller <code>name</code> (visningsnamn) och <code>file</code> (filnamn). Filen används för dropdown-listan.</li>
-    <li>Låtarna sorteras alfabetiskt efter namn och utgör din setlist. Du kan navigera med piltangenter eller knappar.</li>
+    <li>Ordningen i <code>songs.json</code> bevaras och utgör din setlist. Du kan navigera med piltangenter eller knappar.</li>
   </ul>
 
   <h2>8. Djup‑länkar</h2>
@@ -100,15 +101,16 @@
     <li><strong>Vänsterpil</strong> – saktar ned spelningen genom att flytta bak tidslinjen med 80&nbsp;ms.</li>
     <li><strong>Page&nbsp;Down</strong> – laddar nästa låt i setlisten (startar inte).</li>
     <li><strong>Page&nbsp;Up</strong> – laddar föregående låt i setlisten (startar inte).</li>
-    <li><strong>Mellanslag</strong> – startar aktuell låt med inräkning.</li>
+    <li><strong>Mellanslag</strong> – startar från början med inräkning. Om du först klickat på en sektion i makroraden startar mellanslag direkt från den armerade sektionen utan inräkning.</li>
   </ul>
 
   <h2>10. Panelkontroller</h2>
-  <p>I kontrollraden finns tre knappar:</p>
+  <p>I kontrollraden finns fyra knappar:</p>
   <ul>
     <li>🔔 – Metronom. När den är aktiv hör du ett pip på varje fjärdedel. Knappen lyser starkt när den är på och gråar ut när den är av. Metronomen är avstängd som standard.</li>
     <li>⇆ – Autoscroll. När den är aktiv rullar sidan automatiskt så att aktuell takt/sektion alltid är synlig. Autoscroll är påslagen som standard.</li>
     <li>𝓣 – Text. Visar eller döljer sektionstexten (lyrics). Knappen är inaktiv om ingen sektionstext finns i låten.</li>
+    <li>🖨 – Öppnar en ren utskriftsvy för den laddade låten. Där kan du skriva ut eller spara som PDF med titel/tempo överst och sektioner staplade vertikalt.</li>
   </ul>
 
   <p>Fäll‑ihop‑knappen döljer redigeringsraden (låtval, CSV och tempo). Spelarknapparna och kontrollknapparna är alltid synliga.</p>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChordFlow</title>
+  <title>ChordFlow v33</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -53,6 +53,7 @@
         <button id="metronomeToggle" class="control-btn" title="Metronom">🔔</button>
         <button id="scrollToggle" class="control-btn" title="Autoscroll">⇆</button>
         <button id="textToggle" class="control-btn" title="Text">𝓣</button>
+        <button id="printSong" class="control-btn" title="Skriv ut som PDF">🖨</button>
       </div>
     </div>
     <!-- Aktuellt ackord och cue -->
@@ -69,8 +70,12 @@
     <div id="sectionText" class="section-text"></div>
   </main>
   <footer>
-    <small>Klicka på sektioner eller takter för att navigera och spela upp.</small>
+    <small>Klicka på sektioner eller takter för att navigera och spela upp. För PDF: använd skrivarknappen. Utskriften följer textläget och återanvänder sektionsfärger för återkommande delar.</small>
   </footer>
+
+  <!-- Separat utskriftsvy: används bara vid print/PDF och renderas från samma låtdata -->
+  <section id="printView" class="print-view" aria-hidden="true"></section>
+
   <script src="script.js"></script>
 </body>
 </html>
