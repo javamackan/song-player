@@ -164,15 +164,16 @@ function computeScheduleTimes(bpm) {
   }
 }
 
-// Pastellfärger för sektioner. Cykla igenom vid behov
-// Pastellpalett för sektioner. Undvik nyanser nära aprikos (som används för beat-highlight)
+// Pastellfärger för sektioner. Paletten är medvetet ordnad så att
+// intilliggande färger skiljer sig tydligare åt än tidigare, både i live-vy
+// och i utskrift.
 const pastelPalette = [
-  '#e6c1ff', // ljus lavendel
-  '#cce8ff', // ljus himmel
-  '#c0f5e8', // mintgrön
-  '#e8e8c0', // ljus oliv
-  '#ffd9e8', // ljusrosa
-  '#c8d1ff'  // mjuk periwinkle
+  '#cfe8ff', // ljus himmel
+  '#ffd6e7', // ljusrosa
+  '#dff2c2', // mjuk salviagrön
+  '#e2d2ff', // ljus lavendel
+  '#fff0bf', // varm vanilj
+  '#cfd7ff'  // sval periwinkle
 ];
 // Tilldelade färger per sektion (fylls i loadChart)
 let sectionColors = [];
