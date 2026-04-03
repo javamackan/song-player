@@ -401,11 +401,24 @@ main {
   /* fast höjd så att piparna placeras konsekvent */
   height: 5rem;
   background: #fff;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
+
 .bar.active {
-  border-width: 3px;
-  box-shadow: 0 0 0 2px rgba(42, 88, 115, 0.20), 0 3px 8px rgba(0,0,0,0.10);
+  border-width: 5px;
+  border-color: var(--section-active-border, var(--section-border-color, #385066));
+  background: var(--section-active-bg, var(--section-color, #f3f6fa));
+  box-shadow: inset 0 0 0 999px rgba(0,0,0,0.05), 0 0 0 2px rgba(30, 46, 60, 0.28), 0 5px 12px rgba(0,0,0,0.18);
+}
+
+.bar.active .segment:not(.active),
+.bar.active .single-chord {
+  background: var(--section-active-bg, var(--section-color, #f3f6fa));
+}
+
+.bar.active .single-chord {
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
 }
 
 .segment-container {

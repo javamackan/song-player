@@ -686,9 +686,14 @@ function createBarElement(sectionIndex, barIndex, barObj) {
   const sectionColor = sectionColors[sectionIndex] || pastelPalette[sectionIndex % pastelPalette.length];
   // sätt kantfärg baserat på mörkare variant av sektionens pastellfärg
   const borderColor = sectionBorderColors[sectionIndex] || getDarkerColor(sectionColor, 0.7);
+  const activeBorderColor = getDarkerColor(sectionColor, 0.32);
+  const activeBackgroundColor = getDarkerColor(sectionColor, 0.80);
   barDiv.style.borderColor = borderColor;
   barDiv.style.backgroundColor = sectionColor;
+  barDiv.style.setProperty('--section-color', sectionColor);
   barDiv.style.setProperty('--section-border-color', borderColor);
+  barDiv.style.setProperty('--section-active-border', activeBorderColor);
+  barDiv.style.setProperty('--section-active-bg', activeBackgroundColor);
   const beats = getBeats(barObj);
   const segments = getSegments(barObj);
   const uniqueChords = [...new Set(beats.filter(ch => ch !== ''))];
