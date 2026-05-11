@@ -1,5 +1,5 @@
 /*
- * ChordFlow v33
+ * ChordFlow v37
  *
  * Den här versionen bygger vidare på v9 och lägger till ett
  * metronompip (audio) för varje beat samt möjligheten att fälla ihop
@@ -206,12 +206,203 @@ let currentSongTitle = '';
 let currentSongTempo = 120;
 let currentSongSignature = '4/4';
 
+// Sätts till true när låten har laddats från en självförsörjande #s=v1-länk.
+// Används för att ge sådana länkar företräde framför äldre ?song= / ?file=-länkar.
+let loadedFromShareLink = false;
+
+/**
+ * Konverterar bytes till URL-säker Base64 utan utfyllnads-tecken.
+ * @param {Uint8Array} bytes komprimerad binärdata
+ * @returns {string} base64url-sträng
+ */
+function bytesToBase64Url(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+/**
+ * Konverterar en URL-säker Base64-sträng tillbaka till bytes.
+ * @param {string} base64url base64url-sträng utan obligatorisk padding
+ * @returns {Uint8Array} avkodad binärdata
+ */
+function base64UrlToBytes(base64url) {
+  const base64 = base64url
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Komprimerar låttext till deflate-raw och kodar resultatet som base64url.
+ * @param {string} text CSV-/låtsyntax att dela
+ * @returns {Promise<string>} komprimerad payload
+ */
+async function compressSongSyntax(text) {
+  if (!('CompressionStream' in window)) {
+    throw new Error('CompressionStream stöds inte i denna webbläsare.');
+  }
+  const bytes = new TextEncoder().encode(text);
+  const compressedStream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new CompressionStream('deflate-raw'));
+  const compressedBuffer = await new Response(compressedStream).arrayBuffer();
+  return bytesToBase64Url(new Uint8Array(compressedBuffer));
+}
+
+/**
+ * Avkodar och packar upp en base64url-kodad deflate-raw-payload till låttext.
+ * @param {string} payload komprimerad payload från länken
+ * @returns {Promise<string>} återställd CSV-/låtsyntax
+ */
+async function decompressSongSyntax(payload) {
+  if (!('DecompressionStream' in window)) {
+    throw new Error('DecompressionStream stöds inte i denna webbläsare.');
+  }
+  const bytes = base64UrlToBytes(payload);
+  const decompressedStream = new Blob([bytes])
+    .stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'));
+  const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
+  return new TextDecoder().decode(decompressedBuffer);
+}
+
+/**
+ * Fäller ihop editor och låtlista efter att en länk har laddat en låt.
+ * Delas av både gamla djuplänkar och nya självförsörjande låtlänkar.
+ */
+function collapseEditorAfterLinkedLoad() {
+  const panel = document.getElementById('editorPanel');
+  const songRow = document.getElementById('songControls');
+  if (panel && !panel.classList.contains('collapsed')) {
+    panel.classList.add('collapsed');
+  }
+  if (songRow && !songRow.classList.contains('collapsed')) {
+    songRow.classList.add('collapsed');
+  }
+  const btnToggle = document.getElementById('toggleEditor');
+  if (btnToggle) btnToggle.textContent = 'Visa editor';
+}
+
+/**
+ * Kopierar text till urklipp. Om modern clipboard-API inte går att använda
+ * försöker funktionen med äldre kopiering och visar annars en manuell prompt.
+ * @param {string} text text att kopiera
+ * @returns {Promise<boolean>} true om kopiering lyckades automatiskt
+ */
+async function copyTextToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) {
+    // fall through till äldre metod
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (e) {
+    copied = false;
+  }
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    window.prompt('Kopiera länken:', text);
+  }
+  return copied;
+}
+
+/**
+ * Skapar en självförsörjande delningslänk för den låttext som just nu står i editorn.
+ * Format: #s=v1.<deflate-raw + base64url>
+ */
+async function createShareLink() {
+  const csvInput = document.getElementById('csvInput');
+  const raw = csvInput ? csvInput.value.trim() : '';
+  if (!raw) {
+    alert('Det finns ingen låttext att skapa länk från.');
+    return;
+  }
+
+  try {
+    const payload = await compressSongSyntax(raw);
+    const url = new URL(window.location.href);
+    // Den delade länken är självförsörjande; ta bort ev. äldre ?song= / ?file=-parametrar.
+    url.search = '';
+    url.hash = `s=v1.${payload}`;
+    const link = url.toString();
+    const copied = await copyTextToClipboard(link);
+    if (copied) {
+      alert('Länk kopierad till urklipp.');
+    }
+  } catch (e) {
+    console.error('Kunde inte skapa låtlänk', e);
+    alert('Kunde inte skapa länken i denna webbläsare.');
+  }
+}
+
+/**
+ * Läser en självförsörjande låtlänk ur hash-fragmentet och laddar låten.
+ * Format: #s=v1.<payload>
+ * @returns {Promise<boolean>} true om en giltig delningslänk laddades
+ */
+async function handleSharedSongLink() {
+  const hash = window.location.hash || '';
+  if (!hash.startsWith('#s=')) return false;
+
+  const value = hash.slice(3);
+  if (!value.startsWith('v1.')) {
+    alert('Länken använder ett okänt låtformat.');
+    return false;
+  }
+
+  const payload = value.slice(3);
+  if (!payload) return false;
+
+  try {
+    const songSyntax = await decompressSongSyntax(payload);
+    document.getElementById('csvInput').value = songSyntax.trim();
+    const selectEl = document.getElementById('songSelect');
+    if (selectEl) selectEl.value = '';
+    loadChart();
+    collapseEditorAfterLinkedLoad();
+    loadedFromShareLink = true;
+    return true;
+  } catch (e) {
+    console.error('Kunde inte läsa låtlänk', e);
+    alert('Kunde inte läsa låtlänken.');
+    return false;
+  }
+}
+
 /**
  * Kontrollerar URL-parametrar och laddar en låt automatiskt om
  * parametern song eller file finns. Parametern kan vara namn (name)
  * eller filnamn. Körs efter att songsList har laddats.
  */
 async function handleDeepLink() {
+  if (loadedFromShareLink) return;
   const params = new URLSearchParams(window.location.search);
   const target = params.get('song') || params.get('file');
   if (!target || !songsList || !songsList.length) return;
@@ -229,17 +420,7 @@ async function handleDeepLink() {
       // ladda låt men starta inte
       await loadSelectedSong();
       // kollapsa editor- och låtvals-panelen vid djuplänk för att få fokus på spelare
-      const panel = document.getElementById('editorPanel');
-      const songRow = document.getElementById('songControls');
-      if (panel && !panel.classList.contains('collapsed')) {
-        panel.classList.add('collapsed');
-      }
-      if (songRow && !songRow.classList.contains('collapsed')) {
-        songRow.classList.add('collapsed');
-      }
-      // ändra text på fällknapp
-      const btnToggle = document.getElementById('toggleEditor');
-      if (btnToggle) btnToggle.textContent = 'Visa editor';
+      collapseEditorAfterLinkedLoad();
     }
   }
 }
@@ -1198,8 +1379,12 @@ async function loadSongList() {
     }
     // uppdatera hint på navigeringsknappar
     updateSongButtons();
-    // hantera eventuell djuplänk
-    await handleDeepLink();
+    // En självförsörjande låtlänk har företräde framför äldre djuplänkar.
+    if (loadedFromShareLink) {
+      collapseEditorAfterLinkedLoad();
+    } else {
+      await handleDeepLink();
+    }
   } catch (e) {
     // misslyckades att hämta listan; visa ändå dropdown men inaktivera knapp
     console.error('Kunde inte läsa songs.json', e);
@@ -1212,6 +1397,9 @@ async function loadSongList() {
     }
     // uppdatera hint även vid fel
     updateSongButtons();
+    if (loadedFromShareLink) {
+      collapseEditorAfterLinkedLoad();
+    }
   }
 }
 
@@ -1508,8 +1696,9 @@ function autoScrollToCurrent() {
 }
 
 // Eventlyssnare
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('load').addEventListener('click', loadChart);
+  document.getElementById('createLink').addEventListener('click', createShareLink);
   document.getElementById('start').addEventListener('click', () => {
     startPlayback();
   });
@@ -1564,14 +1753,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   textBtn.title = 'Text på/av';
 
+  // Om sidan öppnades via en självförsörjande #s=v1-länk, ladda den först.
+  await handleSharedSongLink();
+
   // ladda songlist och sätt upp lyssnare på laddningsknapp
-  loadSongList();
+  await loadSongList();
   const loadSongBtn = document.getElementById('loadSong');
   if (loadSongBtn) {
     loadSongBtn.addEventListener('click', () => {
       loadSelectedSong();
     });
   }
+
+  // Om användaren öppnar en ny självförsörjande länk medan sidan redan är öppen.
+  window.addEventListener('hashchange', () => {
+    handleSharedSongLink();
+  });
   // när dropdown ändras, uppdatera hint och av/på-läge för nästa/föregående
   const selectEl = document.getElementById('songSelect');
   if (selectEl) {
